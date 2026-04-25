@@ -416,9 +416,10 @@ def tab_clusters(highlight_cluster: int | None):
         x="umap_x", y="umap_y", color="name",
         hover_data=["creative_id", "vertical", "creative_status"],
         title="Creative Genome map (UMAP, colored by cluster)",
-        height=560,
+        height=500,
+        render_mode="webgl",  # GPU-accelerated; smooth even with 1k+ points
     )
-    fig.update_traces(marker=dict(size=6, opacity=0.75))
+    fig.update_traces(marker=dict(size=5, opacity=0.7))
     if highlight_cluster is not None and int(highlight_cluster) in names:
         sub = cdf[cdf.cluster_id == int(highlight_cluster)]
         fig.add_trace(go.Scatter(
@@ -432,7 +433,11 @@ def tab_clusters(highlight_cluster: int | None):
         size=("creative_id", "size"),
         mean_perf=("perf_score" if "perf_score" in cdf.columns else "creative_id", "size"),
     ).reset_index().sort_values("size", ascending=False)
-    summary_md = "### Top 10 clusters by size\n\n" + summary.head(10)[["cluster_id", "name", "size"]].to_markdown(index=False)
+    top10 = summary.head(10)[["cluster_id", "name", "size"]]
+    rows = ["| cluster_id | name | size |", "|---|---|---|"]
+    for _, r in top10.iterrows():
+        rows.append(f"| {int(r.cluster_id)} | {r['name']} | {int(r['size'])} |")
+    summary_md = "### Top 10 clusters by size\n\n" + "\n".join(rows)
     return fig, summary_md
 
 
@@ -465,7 +470,7 @@ def tab_explorer(vertical: str, fmt: str, os_: str, country: str):
     fig_roas = px.line(by_day, x="days_since_launch", y="roas", title="ROAS over creative life")
     fig_roas.update_layout(template="plotly_white", height=300, margin=dict(l=20, r=20, t=40, b=20))
 
-    summary = pd.DataFrame([{
+    s = {
         "rows": len(d),
         "impressions": int(d["impressions"].sum()),
         "clicks": int(d["clicks"].sum()),
@@ -473,8 +478,13 @@ def tab_explorer(vertical: str, fmt: str, os_: str, country: str):
         "revenue_usd": round(d["revenue_usd"].sum(), 2),
         "overall_ctr": round(d["clicks"].sum() / max(d["impressions"].sum(), 1), 4),
         "overall_roas": round(d["revenue_usd"].sum() / max(d["spend_usd"].sum(), 1), 3),
-    }])
-    return fig_ctr, fig_roas, summary.to_markdown(index=False)
+    }
+    summary_md = (
+        "| " + " | ".join(s.keys()) + " |\n"
+        + "|" + "|".join("---" for _ in s) + "|\n"
+        + "| " + " | ".join(str(v) for v in s.values()) + " |"
+    )
+    return fig_ctr, fig_roas, summary_md
 
 
 # ---------------- UI ----------------
@@ -672,7 +682,7 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
             demo.load(overview_metrics, [], [ov_cards, ov_status, ov_vert])
 
         # ---- Health Score tab ----
-        with gr.Tab("Health Score"):
+        with gr.Tab("Health Score") as tab_health_block:
             gr.Markdown("Pick a creative to get its 0–100 Health Score and recommended action (Scale / Continue / Pivot / Pause).")
             with gr.Accordion("How to read this view", open=True):
                 gr.Markdown(HEALTH_INTRO)
@@ -694,10 +704,11 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
                         with gr.Column(scale=1):
                             h_life = gr.Plot()
             h_cid.change(tab_health, [h_cid], [h_img, h_md, h_chart, h_cmp, h_life])
-            demo.load(tab_health, [h_cid], [h_img, h_md, h_chart, h_cmp, h_life])
+            # Defer first render until user clicks the tab — keeps page load fast.
+            tab_health_block.select(tab_health, [h_cid], [h_img, h_md, h_chart, h_cmp, h_life])
 
         # ---- Explain tab ----
-        with gr.Tab("Explain"):
+        with gr.Tab("Explain") as tab_explain_block:
             gr.Markdown("Why does this creative score where it scores? SHAP feature attributions, rubric callouts, and counterfactual experiments.")
             with gr.Accordion("How to read this view", open=True):
                 gr.Markdown(EXPLAIN_INTRO)
@@ -725,11 +736,11 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
                     with gr.Accordion("Suggested counterfactual experiments", open=False):
                         e_cf = gr.Markdown()
             e_cid.change(tab_explain, [e_cid], [e_img, e_headline, e_annot, e_md, e_chart, e_rubric, e_cf])
-            demo.load(tab_explain, [e_cid], [e_img, e_headline, e_annot, e_md, e_chart, e_rubric, e_cf])
+            tab_explain_block.select(tab_explain, [e_cid], [e_img, e_headline, e_annot, e_md, e_chart, e_rubric, e_cf])
             e_vlm_btn.click(tab_explain_vlm, [e_cid], [e_annot])
 
         # ---- Recommend tab ----
-        with gr.Tab("Recommend"):
+        with gr.Tab("Recommend") as tab_rec_block:
             gr.Markdown("Find similar top performers — useful for cloning the visual style of a fatigued creative.")
             with gr.Accordion("How to read this view", open=True):
                 gr.Markdown(RECOMMEND_INTRO)
@@ -758,10 +769,10 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
             r_cid.change(tab_recommend, [r_cid, r_scope, r_div], [r_img, r_md, r_gallery])
             r_scope.change(tab_recommend, [r_cid, r_scope, r_div], [r_img, r_md, r_gallery])
             r_div.change(tab_recommend, [r_cid, r_scope, r_div], [r_img, r_md, r_gallery])
-            demo.load(tab_recommend, [r_cid, r_scope, r_div], [r_img, r_md, r_gallery])
+            tab_rec_block.select(tab_recommend, [r_cid, r_scope, r_div], [r_img, r_md, r_gallery])
 
         # ---- Cluster Map tab ----
-        with gr.Tab("Cluster Map"):
+        with gr.Tab("Cluster Map") as tab_cluster_block:
             gr.Markdown("Visual + behavioral clustering of all 1,080 creatives, projected with UMAP.")
             with gr.Accordion("How to read this view", open=True):
                 gr.Markdown(CLUSTER_INTRO)
@@ -779,10 +790,12 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
                     with gr.Accordion("Top clusters by size", open=True):
                         cluster_table = gr.Markdown()
             cluster_pick.change(tab_clusters, [cluster_pick], [cluster_plot, cluster_table])
-            demo.load(tab_clusters, [cluster_pick], [cluster_plot, cluster_table])
+            # 1080-point UMAP scatter is the heaviest render — only build it when
+            # the user actually opens this tab.
+            tab_cluster_block.select(tab_clusters, [cluster_pick], [cluster_plot, cluster_table])
 
         # ---- Explorer tab ----
-        with gr.Tab("Performance Explorer"):
+        with gr.Tab("Performance Explorer") as tab_explorer_block:
             gr.Markdown("Slice the daily fact table by any combination of dimensions — see lifecycle CTR and ROAS.")
             with gr.Accordion("How to read this view", open=True):
                 gr.Markdown(EXPLORER_INTRO)
@@ -806,7 +819,7 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
                 ex_summary = gr.Markdown()
             for w in [ex_v, ex_f, ex_o, ex_c]:
                 w.change(tab_explorer, [ex_v, ex_f, ex_o, ex_c], [ex_ctr, ex_roas, ex_summary])
-            demo.load(tab_explorer, [ex_v, ex_f, ex_o, ex_c], [ex_ctr, ex_roas, ex_summary])
+            tab_explorer_block.select(tab_explorer, [ex_v, ex_f, ex_o, ex_c], [ex_ctr, ex_roas, ex_summary])
 
     gr.Markdown(
         "<div style='text-align:center; color:#6b7280; font-size:12px; margin-top:16px;'>"

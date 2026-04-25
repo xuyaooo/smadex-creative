@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background:
+      radial-gradient(80% 60% at 50% -10%, rgba(99,102,241,0.35), transparent 60%),
+      radial-gradient(60% 40% at 90% 110%, rgba(236,72,153,0.2),  transparent 60%),
+      #0b1020;
+    color: rgb(226 232 240);
+  }
+  ::selection { background: rgba(99,102,241,0.5); }
+}
+
+@layer components {
+  .container-narrow { @apply mx-auto max-w-6xl px-6; }
+  .section-pad      { @apply py-20 sm:py-28; }
+  .card-surface     {
+    @apply rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-md;
+  }
+  .btn-primary {
+    @apply inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-500 to-pink-500
+           px-5 py-2.5 text-sm font-semibold text-white shadow-glow
+           transition-transform hover:-translate-y-0.5;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-2.5
+           text-sm font-medium text-slate-200 backdrop-blur transition hover:bg-white/10;
+  }
+  .stat-pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1
+           text-xs font-medium text-slate-200;
+  }
+  .nav-link {
+    @apply text-sm font-medium text-slate-300 hover:text-white transition;
+  }
+  .nav-link-active { @apply text-white; }
+}

@@ -1,0 +1,34 @@
+{
+  "data": {
+    "train": 860,
+    "val": 143,
+    "test": 216,
+    "n_features": 25
+  },
+  "training_seconds_total": 13.479999999999999,
+  "temperature_scaling": "disabled (raw probabilities)",
+  "test": {
+    "macro_f1": 0.6774,
+    "weighted_f1": 0.7807,
+    "accuracy": 0.7731,
+    "log_loss": 0.5767,
+    "ece": 0.0731,
+    "auc_top_performer": 0.941,
+    "auc_underperformer": 0.975
+  },
+  "fatigue_4bucket_test_f1": 0.4276,
+  "health_score_spearman": 0.452,
+  "best_per_vertical": {
+    "vertical": "travel",
+    "n": 36,
+    "macro-F1": 0.774,
+    "accuracy": 0.778
+  },
+  "worst_per_vertical": {
+    "vertical": "gaming",
+    "n": 36,
+    "macro-F1": 0.514,
+    "accuracy": 0.583
+  },
+  "artifacts_dir": "outputs/models/final"
+}

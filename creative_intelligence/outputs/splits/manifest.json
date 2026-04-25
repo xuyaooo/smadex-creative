@@ -1,0 +1,24 @@
+{
+  "split_strategy": "StratifiedGroupKFold (campaign_id) \u00d7 stratify on (vertical | creative_status)",
+  "split_sizes": {
+    "train": 717,
+    "val": 143,
+    "test": 216
+  },
+  "train_balanced_subsample_size": 823,
+  "class_balanced_sample_weights": true,
+  "top_performer_extra_boost": 1.7,
+  "n_clusters": 24,
+  "cluster_method": "KMeans (n_init=10, random_state=42) on early-life + tabular features",
+  "no_overlap_check": {
+    "train_val_campaigns": 0,
+    "train_test_campaigns": 0,
+    "val_test_campaigns": 0
+  },
+  "outputs": {
+    "train.parquet": "training set with sample_weight column ready",
+    "val.parquet": "validation set (natural distribution)",
+    "test.parquet": "held-out test set (natural distribution)",
+    "train_balanced_cluster.parquet": "optional alternative training set, per-cluster subsampled to \u226425/class"
+  }
+}

@@ -44,3 +44,4 @@ einops>=0.7.0
 
 # Tests
 pytest>=8.0.0
+tabm

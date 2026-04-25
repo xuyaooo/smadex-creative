@@ -247,6 +247,42 @@ def tab_health(creative_id: int):
     return asset_for(creative_id), md, fatigue_curve(creative_id), fig_cmp, fig_life
 
 
+def tab_explain_vlm(creative_id: int):
+    """Regenerate the 'Reading the image' panel using the local SmolVLM LoRA.
+    Lazy-loads the model on first call. Returns markdown with the same shape
+    as the cached annotation block."""
+    if creative_id is None:
+        return "<i>Pick a creative first.</i>"
+    creative_id = int(creative_id)
+    annot = P.generate_annotation(creative_id)
+    if annot is None:
+        return ("_SmolVLM adapter not available locally. Run "
+                "`scripts/finetune_smolvlm.py` to produce one._")
+    strengths = "\n".join(f"  - {s}" for s in annot.get("visual_strengths", []) or [])
+    weaknesses = "\n".join(f"  - {w}" for w in annot.get("visual_weaknesses", []) or [])
+    elapsed = annot.get("_inference_seconds", "?")
+    return f"""
+<div style="background:#fef3c7; border-left:4px solid #f59e0b; border-radius:8px;
+            padding:14px 18px; margin-top:8px;">
+
+**Reading the image (fresh from local SmolVLM LoRA, {elapsed}s)**
+
+{annot.get('performance_summary','')}
+
+**Visual strengths**
+{strengths or '_none identified_'}
+
+**Visual weaknesses**
+{weaknesses or '_none identified_'}
+
+**Why fatigue risk** — {annot.get('fatigue_risk_reason','')}
+
+**Top recommendation** — {annot.get('top_recommendation','')}
+
+</div>
+"""
+
+
 def tab_explain(creative_id: int):
     if creative_id is None:
         return None, "<i>Pick a creative.</i>", "", None, "", "", ""
@@ -674,6 +710,11 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
                         info="Pick a creative to explain its predicted performance.",
                     )
                     e_img = gr.Image(label="Creative", height=320)
+                    e_vlm_btn = gr.Button(
+                        "Regenerate via local SmolVLM",
+                        variant="secondary",
+                        visible=P.vlm_available,
+                    )
                 with gr.Column(scale=2, min_width=420):
                     e_headline = gr.Markdown()
                     e_annot = gr.Markdown()
@@ -685,6 +726,7 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
                         e_cf = gr.Markdown()
             e_cid.change(tab_explain, [e_cid], [e_img, e_headline, e_annot, e_md, e_chart, e_rubric, e_cf])
             demo.load(tab_explain, [e_cid], [e_img, e_headline, e_annot, e_md, e_chart, e_rubric, e_cf])
+            e_vlm_btn.click(tab_explain_vlm, [e_cid], [e_annot])
 
         # ---- Recommend tab ----
         with gr.Tab("Recommend"):

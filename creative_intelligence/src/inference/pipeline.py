@@ -35,6 +35,8 @@ KNN_PATH = "outputs/knn/index.pkl"
 CLUSTER_LABELS_PATH = "outputs/clusters/labels.parquet"
 CLUSTER_NAMES_PATH = "outputs/clusters/cluster_names.parquet"
 ANNOTATIONS_PATH = "outputs/pseudo_labels/teacher_labels.jsonl"
+VLM_ADAPTER_PATH = "outputs/models/vlm_finetuned"
+VLM_BASE_MODEL = "HuggingFaceTB/SmolVLM-Instruct"
 
 STATUS_LABELS = ["top_performer", "stable", "fatigued", "underperformer"]
 
@@ -91,6 +93,7 @@ class CreativeIntelligencePipeline:
         self._rubric_names: List[str] = []
         self._rubric_importance: Dict[str, float] = {}
         self._annotations: Dict[int, Dict] = {}
+        self._smolvlm_analyzer = None  # lazy: loaded on first call
 
     def _ensure_data(self) -> None:
         if self._master_df is None:
@@ -255,6 +258,45 @@ class CreativeIntelligencePipeline:
         Returns None if no annotation is cached."""
         self._ensure_models()
         return self._annotations.get(int(creative_id))
+
+    @property
+    def vlm_available(self) -> bool:
+        """True iff the LoRA adapter dir exists on disk. Doesn't load the model."""
+        return (self._root / VLM_ADAPTER_PATH / "adapter_config.json").exists()
+
+    def generate_annotation(self, creative_id: int) -> Optional[Dict]:
+        """Generate a fresh annotation for `creative_id` using the local SmolVLM
+        LoRA. Lazy-loads the model on first call (~5s). Returns None if the
+        adapter isn't available on disk."""
+        self._ensure_models()
+        if not self.vlm_available:
+            return None
+
+        if self._smolvlm_analyzer is None:
+            from src.inference.vlm_inference import SmolVLMAnalyzer
+            self._smolvlm_analyzer = SmolVLMAnalyzer(
+                base_model=VLM_BASE_MODEL,
+                adapter_dir=self._root / VLM_ADAPTER_PATH,
+            )
+
+        row = self._master_df[self._master_df["creative_id"] == creative_id]
+        if row.empty:
+            return None
+        row = row.iloc[0]
+        image_path = self.data_loader.get_asset_path(int(creative_id))
+        if not image_path.exists():
+            return None
+
+        metadata = {
+            "vertical": str(row.get("vertical", "")),
+            "format": str(row.get("format", "")),
+            "theme": str(row.get("theme", "")),
+            "dominant_color": str(row.get("dominant_color", "")),
+            "has_discount_badge": int(row.get("has_discount_badge", 0)),
+            "headline": str(row.get("headline", "")),
+            "cta_text": str(row.get("cta_text", "")),
+        }
+        return self._smolvlm_analyzer.annotate(str(image_path), metadata)
 
     def find_similar(
         self,

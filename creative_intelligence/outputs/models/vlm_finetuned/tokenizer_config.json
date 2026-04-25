@@ -1,0 +1,23 @@
+{
+  "add_prefix_space": false,
+  "backend": "tokenizers",
+  "bos_token": "<|im_start|>",
+  "clean_up_tokenization_spaces": false,
+  "eos_token": "<end_of_utterance>",
+  "errors": "replace",
+  "extra_special_tokens": [
+    "<fake_token_around_image>",
+    "<image>",
+    "<end_of_utterance>"
+  ],
+  "is_local": false,
+  "legacy": false,
+  "local_files_only": false,
+  "model_max_length": 16384,
+  "pad_token": "<|im_end|>",
+  "processor_class": "Idefics3Processor",
+  "tokenizer_class": "GPT2Tokenizer",
+  "truncation_side": "left",
+  "unk_token": "<|endoftext|>",
+  "vocab_size": 49152
+}

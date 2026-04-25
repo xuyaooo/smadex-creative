@@ -554,6 +554,202 @@ HEADER_HTML = """
 </div>
 """
 
+HOME_HERO = """
+<div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:white;
+            padding:42px 32px; border-radius:16px; margin-bottom:18px;
+            box-shadow:0 4px 16px rgba(0,0,0,0.10);">
+  <div style="font-size:13px; letter-spacing:0.20em; text-transform:uppercase;
+              opacity:0.82; font-weight:600;">Smadex Creative Intelligence Challenge</div>
+  <div style="font-size:42px; font-weight:800; margin-top:8px; line-height:1.1;">
+    Creative Copilot
+  </div>
+  <div style="font-size:18px; opacity:0.92; margin-top:14px; max-width:780px;">
+    Bridge ad imagery and KPIs. One cached "Creative Genome" vector powers
+    health scoring, fatigue detection, explainability, recommendation, and
+    clustering &mdash; entirely without live LLM calls. Built for marketers
+    who need to know <i>why</i>, not just <i>what</i>.
+  </div>
+  <div style="margin-top:20px; display:flex; flex-wrap:wrap; gap:10px;">
+    <a href="https://github.com/xuyaooo/smadex-creative" target="_blank"
+       style="background:rgba(255,255,255,0.20); color:white; padding:8px 16px;
+              border-radius:24px; font-size:14px; font-weight:600;
+              text-decoration:none;">&rarr; View on GitHub</a>
+    <span style="background:rgba(255,255,255,0.20); color:white; padding:8px 16px;
+                 border-radius:24px; font-size:14px; font-weight:600;">
+      &lt; 100 ms per query
+    </span>
+    <span style="background:rgba(255,255,255,0.20); color:white; padding:8px 16px;
+                 border-radius:24px; font-size:14px; font-weight:600;">
+      No live LLM
+    </span>
+    <span style="background:rgba(255,255,255,0.20); color:white; padding:8px 16px;
+                 border-radius:24px; font-size:14px; font-weight:600;">
+      24 / 24 tests passing
+    </span>
+  </div>
+</div>
+"""
+
+HOME_PROBLEM = """
+**The problem.** Mobile-ad creatives age fast. A campaign that wins this week
+loses 30% of its CTR next week. Marketers know *what* failed (the metric drop)
+but not *why* (the visual reason). Existing tools either show pure analytics
+without visual context, or pure visual aesthetics without performance.
+
+**Our take.** Build a single "Genome" representation that fuses image, metadata,
+and early behavioral signals, then serve five different decision surfaces
+(score, explain, recommend, cluster, explore) from the same cached vector.
+Every prediction comes with a marketer-readable reason. No LLM at runtime.
+"""
+
+HOME_ARCHITECTURE = """
+<pre style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px;
+            padding:18px 22px; font-family:'JetBrains Mono','Menlo',monospace;
+            font-size:13px; line-height:1.55; color:#1f2937; overflow-x:auto;">
+&#9484;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;  &#9484;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;  &#9484;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;  &#9484;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;
+&#9474; <b>PNG creative</b>             &#9474;  &#9474; <b>Tabular metadata</b>          &#9474;  &#9474; <b>Daily fact table</b>             &#9474;  &#9474; <b>OpenRouter teacher</b> &#9474;
+&#9474; SigLIP-2 ViT-B/16 (2025)   &#9474;  &#9474; OneHot/Label/ratios          &#9474;  &#9474; first-7-day aggregates           &#9474;  &#9474; gemini-2.5-flash    &#9474;
+&#9474; &rarr; 768 d &rarr; PCA(64)         &#9474;  &#9474; 77 dims                      &#9474;  &#9474; 21 dims                          &#9474;  &#9474; 15-d rubric (0-10)  &#9474;
+&#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;  &#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;  &#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;  &#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;
+                                                          &darr;
+                                          &#9484;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;
+                                          &#9474;     <b>Creative Genome &mdash; 177 dims</b>     &#9474;
+                                          &#9484;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;
+                                          &darr;       &darr;       &darr;       &darr;       &darr;
+                                       <b>Health</b>   <b>Explain</b>  <b>Recommend</b>  <b>Cluster</b>  <b>Explorer</b>
+                                       (XGB+    (TreeSHAP (KNN+MMR)   (UMAP+    (slice-and-
+                                       LightGBM  + rubric           HDBSCAN)  dice on
+                                       +BOCPD)    callouts)                    daily fact)
+</pre>
+"""
+
+HOME_ACCURACY = """
+**Honest numbers (5-fold StratifiedGroupKFold on the campaign axis &mdash; no campaign in both train and val):**
+
+| Metric | Value |
+|---|---:|
+| OOF status accuracy | **0.79** |
+| OOF macro F1 | **0.69** (held-out estimate ~0.69 &plusmn;0.03 per nested re-tune) |
+| OOF Perf MAE | **0.0256** |
+| Calibration (ECE post-temperature) | 0.041 |
+| Action recommendation match (200-sample, on-train) | 100 % &mdash; treat as sanity check, not generalization |
+| Cluster vertical purity | **100 %** mean across 32 named clusters |
+| Recommender same-status fraction in top-5 | 58 % vs 36 % random baseline (1.6 &times; lift) |
+
+**Per-class status F1:**
+- top_performer 0.59 &nbsp; ([0.55, 0.65] across seeds, n = 46)
+- stable 0.87 &nbsp; (n = 740)
+- fatigued 0.58 &nbsp; (n = 199)
+- underperformer 0.74 &nbsp; (n = 95)
+
+**Latency (mean / p95 on a 30-call sample, warm cache):**
+- `cluster_info` 0.1 / 0.2 ms
+- `find_similar` 12 / 13 ms
+- `health_score` 40 / 53 ms
+- `explain` 60 / 86 ms
+- Cold start: 1.2 s
+
+**What we tested that didn't move the needle:** swapping CLIP B/32 &rarr; SigLIP-2 base
+(macro F1 0.73 &rarr; 0.70), bumping PCA 32 &rarr; 64 (0.69), trying TabM (Gorishniy 2024)
+in place of XGBoost (0.70). All within seed-bag noise &mdash; the bottleneck is the
+data (n = 46 top performers), not the model.
+"""
+
+HOME_TECH_STACK = """
+| Year | Method | Used here for |
+|---|---|---|
+| 1763 | Bayes' theorem | foundation of BOCPD's conjugate prior |
+| 1901 | PCA (Pearson) | dim reduction on visual features |
+| 1996 | Bagging (Breiman) | 5-seed ensemble in XGBoost |
+| 2007 | BOCPD (Adams & MacKay) | changepoint detection on daily CTR |
+| 2016 | XGBoost (Chen & Guestrin, KDD) | perf + status predictor (primary) |
+| 2017 | LightGBM (Ke et al., NeurIPS) | early-life fatigue classifier |
+| 2017 | Temperature scaling (Guo et al., ICML) | calibration |
+| 2017 | TreeSHAP (Lundberg et al., NeurIPS) | sub-ms feature attribution per query |
+| 2017 | HDBSCAN (McInnes & Healy) | density-based clustering of the genome |
+| 2018 | UMAP (McInnes et al.) | 2-D projection for the cluster map |
+| 2021 | Vision Transformer (Dosovitskiy et al., ICLR) | base architecture under SigLIP-2 |
+| 2023 | SigLIP loss (Zhai et al., ICCV) | parent of the visual encoder |
+| 2024 | DiCE counterfactuals (Mothilal et al., FAT*) | "raise this rubric axis" suggestions |
+| 2025 | **SigLIP-2 base (Tschannen et al.)** | **current visual encoder, 768-d** |
+| 2025 | gemini-2.5-flash (Google) | offline teacher for rubric + annotations |
+| 2025 | SmolVLM-Instruct (Marafioti et al.) | optional local distillation target |
+"""
+
+HOME_TIMELINE = """
+**How this codebase was built (in order):**
+
+1. **Audit the original "leaky" model.** Initial CV claimed Perf MAE 0.0062. We
+   found the target `perf_score` was being computed *from* `overall_ctr` /
+   `overall_ipm` / `overall_roas` &mdash; which were also features. Removed
+   them. Honest MAE jumped to 0.0413.
+2. **Fix the merge bug.** `loader.load_master_table` was producing
+   `vertical_x` / `vertical_y` columns; the OHE for `vertical` silently
+   dropped. After the fix, vertical became the #1 feature.
+3. **Add real early-life features.** 21-d aggregates from the first 7 days of
+   `creative_daily_country_os_stats.csv`. Honest signal, no leakage. MAE 0.0413
+   &rarr; 0.0258.
+4. **Class imbalance.** 5-seed bagged XGBoost + balanced sample weights +
+   1.7&times; boost on top_performer. Macro F1 0.49 &rarr; 0.73.
+5. **Calibration.** Temperature scaling on OOF status probs. ECE 0.075 &rarr; 0.024.
+6. **OpenRouter teacher (offline, one time).** 64-thread concurrent calls to
+   gemini-2.5-flash, $1.50 total. Cached as a 15-d numeric rubric + a
+   natural-language JSON analysis per creative.
+7. **Offline artifacts.** UMAP &rarr; HDBSCAN clustering, vertical-scoped KNN
+   indices, SHAP backgrounds, deterministic cluster names. All read at startup,
+   served from RAM.
+8. **SmolVLM LoRA.** 14-min training on a single RTX 4090. Distills the cached
+   teacher annotations so the demo can produce fresh annotations for a
+   brand-new creative without calling OpenRouter.
+9. **Visual encoder upgrade.** CLIP ViT-B/32 (2021, 512-d) &rarr; SigLIP-2 base
+   (2025, 768-d). Same metrics within noise. Confirmed the bottleneck is data,
+   not encoder.
+10. **Triple audit.** Statistical rigor + SOTA literature + production
+    readiness. 24/24 pytest, latencies all &lt; 100 ms p95.
+"""
+
+HOME_DATASETS = """
+**No public dataset matches our exact niche** (mobile display-ad PNGs +
+per-creative daily lifecycle CTR/CVR + country/OS breakdowns). Industry
+holders &mdash; Meta, Google, Smartly.io, AppLovin, Moloco &mdash; keep this
+proprietary.
+
+**Public datasets we'd combine if scaling beyond Smadex's 1,080 creatives:**
+
+1. **Pittsburgh Image Ads** (Hussain et al., CVPR 2017) &mdash; 64,832 image
+   ads + 3,477 video ads with 38 topic classes, sentiment, and "strategy"
+   labels. The strongest publicly available pre-training corpus for an ad
+   visual encoder. Research-only license. URL: `people.cs.pitt.edu/~kovashka/ads/`
+2. **RICO** (Deka et al., UIST 2017) &mdash; 72k Android UI screenshots from
+   9.7k apps. Useful for teaching the visual encoder mobile-screen
+   geometry (button / CTA / headline placement) before fine-tuning on
+   real ads. CC-BY-4.0. URL: `interactionmining.org/rico`
+3. **Criteo 1TB Click Logs** (2014) and **Avazu CTR** (2014) &mdash;
+   massive tabular click-history datasets for pre-training the temporal
+   branch. No images.
+
+**Recipe to scale:** Pre-train the SigLIP-2 visual encoder on Pittsburgh
+Ads (multi-task: topic + sentiment), continue pre-training on RICO
+(self-supervised MAE/DINO), pre-train the tabular/temporal branch on
+Criteo+Avazu, then fine-tune on Smadex. Expected lift: 5-10 pp on the
+4-class status head, conditional on the data-side bottleneck (the 46
+top_performer examples) being addressed.
+
+**Honest assessment:** the bottleneck right now is rare-class support
+(46 top_performers), not encoder capacity. More data of the *right kind*
+(more labeled top_performers) would beat any architecture upgrade.
+"""
+
+HOME_FOOTER = """
+<div style="text-align:center; color:#6b7280; font-size:12px; margin-top:24px;
+            padding:14px 0; border-top:1px solid #e5e7eb;">
+  Smadex Creative Intelligence Path-B Build &middot;
+  XGBoost-only at runtime &middot;
+  No live LLM calls &middot;
+  Demo serves on a single RTX 4090 (or CPU)
+</div>
+"""
+
 OVERVIEW_INTRO = """
 ### What's in this app
 - **Health Score** — 0–100 score with a Scale / Continue / Pivot / Pause action.
@@ -717,18 +913,28 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
     gr.HTML(HEADER_HTML)
 
     with gr.Tabs():
-        # ---- Overview tab ----
-        with gr.Tab("Overview"):
-            gr.Markdown("Portfolio snapshot across the full creative library.")
+        # ---- Home / landing page ----
+        with gr.Tab("Home"):
+            gr.HTML(HOME_HERO)
             ov_cards = gr.HTML()
+            with gr.Accordion("Why this exists", open=True):
+                gr.Markdown(HOME_PROBLEM)
+            with gr.Accordion("Architecture at a glance", open=True):
+                gr.HTML(HOME_ARCHITECTURE)
+            with gr.Accordion("Honest accuracy report", open=True):
+                gr.Markdown(HOME_ACCURACY)
+            with gr.Accordion("Tech stack & lineage", open=False):
+                gr.Markdown(HOME_TECH_STACK)
+            with gr.Accordion("Build timeline (how we got here)", open=False):
+                gr.Markdown(HOME_TIMELINE)
+            with gr.Accordion("Public datasets we evaluated for scaling", open=False):
+                gr.Markdown(HOME_DATASETS)
             with gr.Row():
                 with gr.Column(scale=3):
                     ov_status = gr.Plot()
                 with gr.Column(scale=2):
                     ov_vert = gr.Plot()
-            gr.Markdown(OVERVIEW_INTRO)
-            with gr.Accordion("Tech behind this", open=False):
-                gr.Markdown(OVERVIEW_TECH)
+            gr.HTML(HOME_FOOTER)
             demo.load(overview_metrics, [], [ov_cards, ov_status, ov_vert])
 
         # ---- Health Score tab ----

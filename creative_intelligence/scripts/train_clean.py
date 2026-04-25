@@ -211,6 +211,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-catboost", action="store_true",
                         help="Skip CatBoost (the slowest model; useful for smoke runs)")
+    parser.add_argument("--final", action="store_true",
+                        help="Production mode: refit on train ∪ val (hyperparams "
+                             "and temperature locked from val-tuned run). Saves to "
+                             "outputs/models/final/.")
     args = parser.parse_args()
 
     print("loading clean splits...")
@@ -218,6 +222,25 @@ def main():
     val   = pd.read_parquet(SPLITS / "val.parquet")
     test  = pd.read_parquet(SPLITS / "test.parquet")
     print(f"  train={len(train)}  val={len(val)}  test={len(test)}")
+
+    # In --final mode, combine train + val into one training set (n=860).
+    # Hyperparameters and temperature were locked on val in the prior run.
+    locked_T = None
+    if args.final:
+        prior_meta_path = CLEAN / "meta.pkl"
+        if not prior_meta_path.exists():
+            sys.exit("--final requires a prior val-tuned run. Run "
+                     "`python3 scripts/train_clean.py` first to lock hyperparams.")
+        with open(prior_meta_path, "rb") as f:
+            locked_T = pickle.load(f)["temperature"]
+        train = pd.concat([train, val], ignore_index=True)
+        # Recompute sample weights on the bigger set so the class-weight
+        # scheme stays correct.
+        from sklearn.utils.class_weight import compute_sample_weight as _csw
+        w = _csw("balanced", train["creative_status"].values).astype(np.float32)
+        w[train["creative_status"].values == "top_performer"] *= 1.7
+        train["sample_weight"] = w
+        print(f"  --final: train ∪ val → {len(train)}; locked T={locked_T:.3f}")
 
     feats = [c for c in train.columns if c not in NON_FEATURES]
     cat_cols = [c for c in feats if not pd.api.types.is_numeric_dtype(train[c])]
@@ -285,23 +308,33 @@ def main():
     p_ens_va = np.mean([p[0] for p in proba.values()], axis=0)
     p_ens_te = np.mean([p[1] for p in proba.values()], axis=0)
 
-    # Per-model val macro-F1
-    print("\nVal macro-F1 by model:")
+    # Per-model val macro-F1 — only meaningful when val is held out.
     val_f1 = {}
-    for name, (p_va, _) in proba.items():
-        f = f1_score(y_va, p_va.argmax(1), average="macro")
-        val_f1[name] = round(float(f), 4)
-        print(f"  {name:<10} {f:.4f}")
-    val_f1["ensemble"] = round(float(f1_score(y_va, p_ens_va.argmax(1), average="macro")), 4)
-    print(f"  {'ensemble':<10} {val_f1['ensemble']:.4f}")
+    if not args.final:
+        print("\nVal macro-F1 by model:")
+        for name, (p_va, _) in proba.items():
+            f = f1_score(y_va, p_va.argmax(1), average="macro")
+            val_f1[name] = round(float(f), 4)
+            print(f"  {name:<10} {f:.4f}")
+        val_f1["ensemble"] = round(float(f1_score(y_va, p_ens_va.argmax(1), average="macro")), 4)
+        print(f"  {'ensemble':<10} {val_f1['ensemble']:.4f}")
+    else:
+        print("\n(val is now part of training; per-model val F1 not reported "
+              "to avoid confusion with held-out scores)")
 
-    # Calibration on val
-    T_opt = fit_temperature(p_ens_va, y_va, len(class_names))
-    p_ens_va_cal = temp_scale(p_ens_va, T_opt)
+    # Calibration: in --final mode use the previously-locked T (val is now
+    # part of training so we cannot re-tune it without leakage). In standard
+    # mode, fit T on the held-out val proba.
+    if args.final:
+        T_opt = locked_T
+        print(f"\nlocked T = {T_opt:.3f} (carried over from val-tuned run)")
+    else:
+        T_opt = fit_temperature(p_ens_va, y_va, len(class_names))
+        p_ens_va_cal = temp_scale(p_ens_va, T_opt)
+        print(f"\noptimal T = {T_opt:.3f}")
+        print(f"ECE  uncal: {expected_calibration_error(p_ens_va, y_va):.4f}   "
+              f"cal: {expected_calibration_error(p_ens_va_cal, y_va):.4f}")
     p_ens_te_cal = temp_scale(p_ens_te, T_opt)
-    print(f"\noptimal T = {T_opt:.3f}")
-    print(f"ECE  uncal: {expected_calibration_error(p_ens_va, y_va):.4f}   "
-          f"cal: {expected_calibration_error(p_ens_va_cal, y_va):.4f}")
 
     # Test eval (touch ONCE)
     pred_te = p_ens_te_cal.argmax(1)
@@ -317,24 +350,29 @@ def main():
 
     # Fatigue 4-bucket model
     fat, fy_enc, fat_f1_va, fat_f1_te = train_fatigue(train, val, test, X_tr, X_va, X_te)
-    print(f"\nFatigue 4-bucket   val macro-F1={fat_f1_va:.3f}   test={fat_f1_te:.3f}")
+    if args.final:
+        print(f"\nFatigue 4-bucket   test macro-F1={fat_f1_te:.3f}  "
+              f"(val merged into train; no held-out val score)")
+    else:
+        print(f"\nFatigue 4-bucket   val macro-F1={fat_f1_va:.3f}   test={fat_f1_te:.3f}")
 
-    # Persist
-    CLEAN.mkdir(parents=True, exist_ok=True)
+    # Persist — separate folder for --final so val-tuned artifacts stay around
+    out_dir = MODELS / ("final" if args.final else "clean")
+    out_dir.mkdir(parents=True, exist_ok=True)
     MODELS.mkdir(parents=True, exist_ok=True)
 
     # Save individual models
     for i, m in enumerate(xgb_models):
-        m.save_model(str(CLEAN / f"xgb_seed{i}.json"))
-    with open(CLEAN / "lgb.pkl", "wb") as f:
+        m.save_model(str(out_dir / f"xgb_seed{i}.json"))
+    with open(out_dir / "lgb.pkl", "wb") as f:
         pickle.dump(lgb_model, f)
     if cb_model:
-        cb_model.save_model(str(CLEAN / "catboost.cbm"))
-    with open(CLEAN / "hgb.pkl", "wb") as f:
+        cb_model.save_model(str(out_dir / "catboost.cbm"))
+    with open(out_dir / "hgb.pkl", "wb") as f:
         pickle.dump(hgb_model, f)
-    with open(CLEAN / "logreg.pkl", "wb") as f:
+    with open(out_dir / "logreg.pkl", "wb") as f:
         pickle.dump(lr_model, f)
-    with open(CLEAN / "fatigue_4bucket.pkl", "wb") as f:
+    with open(out_dir / "fatigue_4bucket.pkl", "wb") as f:
         pickle.dump({"model": fat, "encoder": fy_enc}, f)
 
     # Save metadata: encoders, feature lists, label encoder, temperature
@@ -349,7 +387,7 @@ def main():
         "bag_seeds": BAG_SEEDS,
         "use_catboost": cb_model is not None,
     }
-    with open(CLEAN / "meta.pkl", "wb") as f:
+    with open(out_dir / "meta.pkl", "wb") as f:
         pickle.dump(meta, f)
 
     # Backend-compat shims
@@ -381,12 +419,13 @@ def main():
             "test_macro_f1": round(float(fat_f1_te), 4),
         },
     }
-    (MODELS / "clean_metrics.json").write_text(json.dumps(metrics, indent=2))
+    metrics_name = "final_metrics.json" if args.final else "clean_metrics.json"
+    (MODELS / metrics_name).write_text(json.dumps(metrics, indent=2))
 
-    print(f"\nartifacts → {CLEAN}/")
-    for p in sorted(CLEAN.glob("*")):
+    print(f"\nartifacts → {out_dir}/")
+    for p in sorted(out_dir.glob("*")):
         print(f"  {p.name:<28} {p.stat().st_size // 1024:>6} KB")
-    print(f"\nmetrics  → outputs/models/clean_metrics.json")
+    print(f"\nmetrics  → outputs/models/{metrics_name}")
     print(f"shims    → outputs/models/{{xgb_status.json, tabular_meta.pkl, temperature.pkl}}")
 
 

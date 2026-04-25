@@ -11,6 +11,8 @@ scikit-learn>=1.4.0
 xgboost>=2.0.0
 lightgbm>=4.3.0
 tabm
+catboost>=1.2.0
+shap>=0.45.0
 
 # ---------- Deep learning ----------
 torch>=2.1.0

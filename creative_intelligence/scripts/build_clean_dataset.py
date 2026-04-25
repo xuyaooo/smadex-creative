@@ -36,9 +36,22 @@ BAD_RENDERS = [500204, 500594, 500959]   # text-overflow render bugs
 BYTE_DUPS = [500665]                     # duplicate of 500017
 
 DROP_LEAKAGE = [
+    # ratio columns from the original list
     "overall_ctr", "overall_ipm", "overall_roas", "ctr_decay_pct",
     "overall_cvr", "cvr_decay_pct", "last_7d_ctr", "last_7d_cvr",
     "peak_rolling_ctr_5", "first_7d_ctr", "first_7d_cvr",
+    # lifetime cumulative counts — these encode the eventual outcome
+    "total_spend_usd", "total_impressions", "total_clicks",
+    "total_conversions", "total_revenue_usd", "total_days_active",
+    "peak_day_impressions",
+    # last-7d counts: end-of-life = leakage
+    "last_7d_impressions", "last_7d_clicks", "last_7d_conversions",
+    # perf_score is a target-derived ranking; fatigue_day is a target
+    "perf_score", "fatigue_day",
+    # NOTE: first_7d_impressions / first_7d_clicks / first_7d_conversions
+    # are KEPT — they are legitimate launch-time features the challenge
+    # explicitly expects ("Time-series performance data: Daily spend,
+    # CTR, and CVR" + "Campaign start date").
 ]
 DROP_VOCAB = ["headline", "subhead", "cta_text"]
 DROP_LOWMI = [
@@ -111,8 +124,9 @@ def cluster_genome(summary: pd.DataFrame, daily: pd.DataFrame,
         if c not in feat.columns:
             feat[c] = 0
 
-    early = early_life_features(daily)
-    feat = feat.merge(early, on="creative_id", how="left").fillna(0)
+    if "early_imp" not in feat.columns:
+        early = early_life_features(daily)
+        feat = feat.merge(early, on="creative_id", how="left").fillna(0)
 
     feature_columns = cat_cols + bin_cols + num_cols + [
         "early_imp", "early_clicks", "early_ctr", "early_cvr", "early_revenue",
@@ -193,11 +207,21 @@ def main():
     summary = drop_bad_rows(summary, exclude)
     print(f"  after dropping {len(exclude)} bad creatives: {len(summary)}")
 
-    # 2. Drop bad columns (informational — keep on the parquet so downstream
-    #    modules can still grab metadata they expect, but compute the model
-    #    feature frame from a cleaned subset)
+    # 2. Drop leakage / target-proxy columns. The output parquet is intended
+    #    for direct (X, y) consumption: every remaining column is either
+    #    metadata (creative_id, campaign_id, vertical, …) or a launch-time-safe
+    #    feature (first_7d_*, visual flags, rubric).
     summary_clean = drop_bad_columns(summary)
     print(f"  columns: {summary.shape[1]} → {summary_clean.shape[1]}")
+
+    # 2b. Merge early-life behavioral features (first 7 days from the daily
+    #     fact table). These are launch-time-safe — by the time a marketer
+    #     scores a creative, the first 7 days have already happened.
+    early = early_life_features(daily)
+    summary_clean = summary_clean.merge(early, on="creative_id", how="left").fillna(
+        {c: 0 for c in early.columns if c != "creative_id"}
+    )
+    print(f"  + early-life features: {summary_clean.shape[1]}")
 
     # 3. Cluster
     labels, feat_cols = cluster_genome(summary_clean, daily, k=args.k, seed=args.seed)

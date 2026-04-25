@@ -1,24 +1,113 @@
 {
-  "split_strategy": "StratifiedGroupKFold (campaign_id) \u00d7 stratify on (vertical | creative_status)",
-  "split_sizes": {
+  "rows_excluded": [
+    500204,
+    500594,
+    500665,
+    500959
+  ],
+  "exclusion_reasons": {
+    "render_bugs": [
+      500204,
+      500594,
+      500959
+    ],
+    "byte_identical_dups": [
+      500665
+    ]
+  },
+  "columns_dropped": {
+    "leakage": [
+      "overall_ctr",
+      "overall_ipm",
+      "overall_roas",
+      "ctr_decay_pct",
+      "overall_cvr",
+      "cvr_decay_pct",
+      "last_7d_ctr",
+      "last_7d_cvr",
+      "peak_rolling_ctr_5",
+      "first_7d_ctr",
+      "first_7d_cvr",
+      "total_spend_usd",
+      "total_impressions",
+      "total_clicks",
+      "total_conversions",
+      "total_revenue_usd",
+      "total_days_active",
+      "peak_day_impressions",
+      "last_7d_impressions",
+      "last_7d_clicks",
+      "last_7d_conversions",
+      "perf_score",
+      "fatigue_day"
+    ],
+    "vocab_collapse": [
+      "headline",
+      "subhead",
+      "cta_text"
+    ],
+    "low_mi_visual": [
+      "text_density",
+      "readability_score",
+      "brand_visibility_score",
+      "clutter_score",
+      "novelty_score",
+      "faces_count",
+      "product_count",
+      "motion_score"
+    ],
+    "redundant_strings": [
+      "advertiser_name",
+      "app_name",
+      "asset_file"
+    ]
+  },
+  "clustering": {
+    "method": "KMeans",
+    "n_clusters": 24,
+    "feature_columns": [
+      "vertical",
+      "format",
+      "theme",
+      "hook_type",
+      "dominant_color",
+      "emotional_tone",
+      "target_age_segment",
+      "target_os",
+      "has_price",
+      "has_discount_badge",
+      "has_gameplay",
+      "has_ugc_style",
+      "daily_budget_usd",
+      "duration_sec",
+      "campaign_duration",
+      "copy_length_chars",
+      "early_imp",
+      "early_clicks",
+      "early_ctr",
+      "early_cvr",
+      "early_revenue"
+    ]
+  },
+  "sample_weight_strategy": {
+    "base": "balanced",
+    "top_performer_extra_boost": 1.7
+  },
+  "splits": {
     "train": 717,
     "val": 143,
     "test": 216
   },
-  "train_balanced_subsample_size": 823,
-  "class_balanced_sample_weights": true,
-  "top_performer_extra_boost": 1.7,
-  "n_clusters": 24,
-  "cluster_method": "KMeans (n_init=10, random_state=42) on early-life + tabular features",
-  "no_overlap_check": {
-    "train_val_campaigns": 0,
-    "train_test_campaigns": 0,
-    "val_test_campaigns": 0
+  "balanced_subsample_size": 823,
+  "campaign_overlap": {
+    "train_val": 0,
+    "train_test": 0,
+    "val_test": 0
   },
-  "outputs": {
-    "train.parquet": "training set with sample_weight column ready",
-    "val.parquet": "validation set (natural distribution)",
-    "test.parquet": "held-out test set (natural distribution)",
-    "train_balanced_cluster.parquet": "optional alternative training set, per-cluster subsampled to \u226425/class"
+  "files": {
+    "train.parquet": "training set with sample_weight column",
+    "val.parquet": "validation set, natural class distribution",
+    "test.parquet": "held-out test, touch ONCE at the end",
+    "train_balanced_cluster.parquet": "alt training set, per-cluster subsampled"
   }
 }

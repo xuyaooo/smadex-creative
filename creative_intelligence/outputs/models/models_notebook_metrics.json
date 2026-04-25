@@ -1,0 +1,11 @@
+{
+  "best_single_model": "CatBoost",
+  "val_macro_f1": 0.6259,
+  "test_macro_f1": 0.6345125023091125,
+  "test_weighted_f1": 0.7577659362970097,
+  "test_log_loss": 0.5898774721233252,
+  "test_ece": 0.09608646314435965,
+  "temperature": 0.9594588566419675,
+  "fatigue_test_macro_f1": 0.391826923076923,
+  "health_score_spearman_test": 0.4361995031853462
+}

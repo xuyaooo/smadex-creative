@@ -13,6 +13,7 @@ import pandas as pd
 import yaml
 
 import pickle
+import threading
 
 from src.calibration.temperature import TemperatureScaler
 from src.data.early_features import compute_early_features
@@ -94,6 +95,7 @@ class CreativeIntelligencePipeline:
         self._rubric_importance: Dict[str, float] = {}
         self._annotations: Dict[int, Dict] = {}
         self._smolvlm_analyzer = None  # lazy: loaded on first call
+        self._smolvlm_lock = threading.Lock()  # protects _smolvlm_analyzer init
 
     def _ensure_data(self) -> None:
         if self._master_df is None:
@@ -272,12 +274,17 @@ class CreativeIntelligencePipeline:
         if not self.vlm_available:
             return None
 
+        # Double-checked locking: cheap fast path on the hot side, lock only when
+        # we actually need to construct the analyzer. Prevents two simultaneous
+        # "Regenerate" clicks from each loading the LoRA into separate GPU memory.
         if self._smolvlm_analyzer is None:
-            from src.inference.vlm_inference import SmolVLMAnalyzer
-            self._smolvlm_analyzer = SmolVLMAnalyzer(
-                base_model=VLM_BASE_MODEL,
-                adapter_dir=self._root / VLM_ADAPTER_PATH,
-            )
+            with self._smolvlm_lock:
+                if self._smolvlm_analyzer is None:
+                    from src.inference.vlm_inference import SmolVLMAnalyzer
+                    self._smolvlm_analyzer = SmolVLMAnalyzer(
+                        base_model=VLM_BASE_MODEL,
+                        adapter_dir=self._root / VLM_ADAPTER_PATH,
+                    )
 
         row = self._master_df[self._master_df["creative_id"] == creative_id]
         if row.empty:
@@ -504,7 +511,8 @@ class CreativeIntelligencePipeline:
         agg = ts.groupby("days_since_launch").agg(impressions=("impressions", "sum"),
                                                   clicks=("clicks", "sum")).reset_index()
         ctr_series = (agg["clicks"] / agg["impressions"].replace(0, np.nan)).fillna(0).values
-        cp = fatigue_changepoint(ctr_series, hazard_lambda=50.0, threshold=0.15)
+        # Use the relative threshold helper (3× the prior baseline 1/lambda).
+        cp = fatigue_changepoint(ctr_series, hazard_lambda=50.0, threshold_multiple=3.0)
 
         return health_score(
             perf_pred=perf_pred,

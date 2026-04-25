@@ -88,13 +88,29 @@ def bocpd(
 
 
 def fatigue_changepoint(
-    daily_ctr: np.ndarray, hazard_lambda: float = 30.0, threshold: float = 0.4
+    daily_ctr: np.ndarray,
+    hazard_lambda: float = 30.0,
+    threshold_multiple: float = 3.0,
 ) -> dict:
-    """Convenience wrapper that returns a single dict consumable by Health Score."""
+    """Convenience wrapper that returns a single dict consumable by Health Score.
+
+    The previous static threshold (0.4) was unreachable: the run-length-zero
+    posterior `R[0, t+1]` is bounded near the prior hazard rate `H = 1/lambda`
+    when likelihoods are similar across run-lengths, so for `lambda=30` the
+    typical baseline `cp_prob` sits around 0.033. Using a *relative* threshold
+    (multiple of the prior baseline) makes the detector actually fire.
+    """
+    if len(daily_ctr) < 4:
+        return {"has_changepoint": False, "changepoint_day": -1, "max_cp_prob": 0.0}
     cp_prob, best_day = bocpd(daily_ctr, hazard_lambda=hazard_lambda)
-    has_cp = bool(cp_prob.max() > threshold) if len(cp_prob) > 0 else False
+    if len(cp_prob) == 0:
+        return {"has_changepoint": False, "changepoint_day": -1, "max_cp_prob": 0.0}
+    baseline = 1.0 / max(hazard_lambda, 1.0)  # the prior P(run length = 0)
+    threshold = threshold_multiple * baseline
+    has_cp = bool(cp_prob.max() > threshold)
     return {
         "has_changepoint": has_cp,
         "changepoint_day": int(best_day) if has_cp else -1,
-        "max_cp_prob": float(cp_prob.max()) if len(cp_prob) > 0 else 0.0,
+        "max_cp_prob": float(cp_prob.max()),
+        "threshold": float(threshold),
     }

@@ -1,16 +1,14 @@
 # Core ML
 torch>=2.1.0
 torchvision>=0.16.0
-transformers>=4.40.0
+transformers>=4.45.0          # Path-B SmolVLM finetune needs AutoModelForImageTextToText
 peft>=0.10.0
 accelerate>=0.28.0
 datasets>=2.18.0
 sentencepiece>=0.2.0
 
-# Vision
+# Vision (CLIP base + planned SigLIP-2 upgrade both go via transformers)
 Pillow>=10.0.0
-clip-by-openai>=1.0.0
-opencv-python>=4.9.0
 
 # Tabular
 xgboost>=2.0.0
@@ -18,17 +16,21 @@ lightgbm>=4.3.0
 scikit-learn>=1.4.0
 shap>=0.45.0
 
-# Time series
-prophet>=1.1.5
+# Embedding / clustering — were missing pre-Path-B and are required by
+# scripts/build_artifacts.py + scripts/name_clusters.py.
+umap-learn>=0.5.5
+hdbscan>=0.8.40
+
+# Calibration helpers (we use scipy.optimize.minimize_scalar for temperature)
+scipy>=1.12.0
 
 # Data
 pandas>=2.2.0
 numpy>=1.26.0
-scipy>=1.12.0
+pyarrow>=15.0.0               # parquet reader for rubric / clusters / annotations
 
-# NLP evaluation
-rouge-score>=0.1.2
-nltk>=3.8.0
+# OpenRouter teacher (offline labeling + rubric extraction)
+openai>=1.30.0
 
 # Demo
 gradio>=4.25.0
@@ -39,3 +41,6 @@ matplotlib>=3.8.0
 pyyaml>=6.0
 tqdm>=4.66.0
 einops>=0.7.0
+
+# Tests
+pytest>=8.0.0

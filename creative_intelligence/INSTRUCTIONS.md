@@ -1,256 +1,265 @@
-# Smadex Creative Intelligence — Setup & Run Instructions
+# Smadex Creative Intelligence — Path-B Build
 
-## Overview
-
-This solution combines **CLIP image embeddings**, **XGBoost tabular modeling**, **LightGBM fatigue detection**, and an optional **SmolVLM student** finetuned via **Self-Distillation Fine-Tuning (SDFT)** — a continual-learning method where the model uses a stronger teacher to generate pseudo-labels, then distills those labels into itself on-policy to prevent catastrophic forgetting.
-
-**Architecture at a glance:**
-
-```
-Creative image → CLIP ViT-B/32 (512-dim) → PCA (32-dim) ─┐
-Creative metadata → TabularFeatureEngineer (83 features) ──┴→ XGBoost → perf_score + status
-Daily CTR/IPM series → LightGBM fatigue classifier + day regressor
-Image + metadata → SmolVLM-Instruct (LoRA) → plain-English analysis (optional, requires GPU)
-```
+A fast, deterministic, no-runtime-LLM creative copilot. One cached "Creative
+Genome" vector powers all 5 challenge paths (Performance Explorer, Fatigue
+Detection, Explainability, Recommendation, Clustering). Cold start ≈ 1–2s,
+per-query latency p95 < 100 ms.
 
 ---
 
-## 1. Environment Setup
+## What's in the demo
+
+Six tabs sharing one cached `CreativeIntelligencePipeline`:
+
+1. **Overview** — portfolio dashboard (1,080 creatives, 36 advertisers, 180 campaigns)
+2. **Health Score** — 0–100 score + action: Scale / Continue / Pivot / Pause
+3. **Explain** — image + SHAP feature attributions + rubric callouts + counterfactuals + cached natural-language teacher annotation; optional regenerate-via-local-SmolVLM button
+4. **Recommend** — vertical-scoped CLIP-NN, optional MMR diversification + perf re-rank
+5. **Cluster Map** — UMAP 2-D projection of all 1,080 creatives, 32 named HDBSCAN clusters
+6. **Performance Explorer** — slice the 192k-row daily fact table by vertical / format / OS / country
+
+Each tab has a "How to read this view" and "Tech behind this" accordion explaining the model and methodology.
+
+---
+
+## Architecture at a glance
+
+```
+┌────────────────┐  ┌────────────────────┐  ┌─────────────────────┐  ┌────────────┐
+│  Image (PNG)   │  │  Tabular metadata  │  │  Daily fact table   │  │  OpenRouter│
+└───────┬────────┘  └─────────┬──────────┘  └──────────┬──────────┘  │   teacher  │
+        │                     │                        │             │ (offline,  │
+   CLIP ViT-B/32         77 OHE/LE +              first-7-day        │  cached)   │
+   → 512d → PCA(32)      4 engineered ratios      aggregates → 21d   └─────┬──────┘
+        │                     │                        │                   │
+        └─────────────────────┴───────┬────────────────┴───────────────────┘
+                                      ▼
+                             ┌────────────────────┐
+                             │ Genome Vector 145d │
+                             │ + 15-d LLM rubric  │
+                             └─────────┬──────────┘
+                                       │
+                  ┌────────────────────┼────────────────────┐
+                  ▼                    ▼                    ▼
+          ┌───────────────┐   ┌─────────────────┐   ┌──────────────────┐
+          │ XGBoost x5    │   │ LightGBM        │   │ NN index (per    │
+          │ (perf + 4-cls │   │ fatigue clf+reg │   │  vertical)       │
+          │  status)      │   │ + BOCPD on CTR  │   │ + UMAP/HDBSCAN   │
+          │ + temperature │   │                 │   │ + MMR re-rank    │
+          │ + class bias  │   │                 │   │                  │
+          └───────────────┘   └─────────────────┘   └──────────────────┘
+```
+
+All inference reads from cached `outputs/*` parquet/pkl/npz files. No live LLM.
+
+---
+
+## Setup
 
 ```bash
+# 1. Python environment
 conda create -n smadex-ci python=3.11 -y
 conda activate smadex-ci
 cd creative_intelligence
 pip install -r requirements.txt
-brew install libomp   # macOS only — required by XGBoost
 ```
 
-> **macOS note:** Never use `conda run` to invoke scripts — it causes an OpenMP segfault.  
-> Use the direct path: `/opt/anaconda3/envs/smadex-ci/bin/python` instead.
-
----
-
-## 2. Directory Layout
-
-```
-creative_intelligence/
-├── config.yaml                  # Central config — all paths, hyperparams, API keys
-├── requirements.txt
-├── demo/
-│   └── app.py                   # Gradio demo (4 tabs)
-├── scripts/
-│   ├── train_all.py             # Train XGBoost + LightGBM (Step 3)
-│   ├── precompute_embeddings.py # Pre-compute CLIP embeddings (Step 3, auto-run)
-│   ├── label_with_openrouter.py # Teacher labeling via OpenRouter API (Step 4)
-│   ├── run_pipeline.py          # VLM finetuning with SDFT (Step 5)
-│   └── generate_pseudo_labels.py
-├── src/
-│   ├── data/
-│   │   ├── loader.py
-│   │   └── feature_engineering.py
-│   ├── embeddings/clip_encoder.py
-│   ├── models/
-│   │   ├── tabular_model.py
-│   │   ├── fatigue_detector.py
-│   │   ├── vlm_model.py
-│   │   └── recommender.py
-│   ├── training/
-│   │   ├── openrouter_teacher.py
-│   │   └── on_policy_distillation.py
-│   └── inference/pipeline.py
-└── outputs/                     # Created automatically during training
-    ├── embeddings/
-    ├── models/
-    └── pseudo_labels/
+Optional (for actually running the offline teacher labeler / SmolVLM finetune):
+```bash
+export OPENROUTER_API_KEY=sk-or-...     # for rubric + annotation extraction
+export HF_TOKEN=hf_...                   # avoids HF Hub rate limits
 ```
 
 ---
 
-## 3. Train Models (Required)
+## Reproduce the demo end-to-end
 
-Run from `creative_intelligence/`:
+The artifacts in `outputs/` are committed, so for a quick start you can skip
+straight to step 5. The full reproduction:
+
+### 1. Train the tabular + fatigue models
 
 ```bash
-/opt/anaconda3/envs/smadex-ci/bin/python scripts/train_all.py
+python3 scripts/train_all.py
 ```
 
-This will:
-1. Load `creative_summary.csv` + `creative_daily_country_os_stats.csv`
-2. Build 83 tabular features (OHE, label-encoded, numeric, engineered ratios)
-3. Load pre-computed CLIP embeddings from `outputs/embeddings/clip_embeddings.npz` (auto-computed if missing)
-4. Train XGBoost regressor (perf score, CV MAE ≈ 0.006) and classifier (4-class status)
-5. Train LightGBM fatigue classifier + day regressor
-6. Save all models to `outputs/models/`
+What it does:
+- Loads `creative_summary.csv` joined with `campaigns.csv` + `advertisers.csv`
+- Builds 77 tabular features + 4 engineered ratios
+- Pulls 32-dim PCA-reduced CLIP embeddings from `outputs/embeddings/clip_embeddings.npz`
+- Computes 21-d early-life behavioral features from the first 7 days of `creative_daily_country_os_stats.csv`
+- Concats the 15-d LLM rubric (skipped with a hint if not yet extracted)
+- Runs 5-fold StratifiedGroupKFold (grouped by `campaign_id`) on a 5-seed XGBoost ensemble for status, GroupKFold for perf
+- Searches a 4-D log-prob class bias on OOF for max macro-F1
+- Fits a single-scalar temperature scaler (Guo ICML 2017)
+- Trains LightGBM `(fatigue_clf, fatigue_reg)`
+- Persists every model under `outputs/models/`
 
 Expected output:
 ```
-Feature matrix: (1080, 115)
-CV Perf MAE: 0.0062 ± 0.0004
-Tabular models saved.
-Fatigue detector saved.
-All training complete!
+CV Perf MAE (OOF, GroupKFold): 0.0251 ± 0.0024
+Status report (OOF, StratifiedGroupKFold + balanced+boost + 5-seed bag + prior-bias):
+  top_performer  precision 0.62  recall 0.67  F1 0.65   (n=46)
+  stable         precision 0.87  recall 0.86  F1 0.87   (n=740)
+  fatigued       precision 0.62  recall 0.63  F1 0.62   (n=199)
+  underperformer precision 0.78  recall 0.78  F1 0.78   (n=95)
+  accuracy                                       0.80   (n=1080)
+  macro avg                                      0.73
+Temperature scaling: T = 1.377;  ECE 0.0765 → 0.0333
 ```
 
----
+> **Honest-numbers caveat.** Macro F1 is OOF-tuned (the bias grid is fit on the
+> same OOF predictions). A nested re-tune with hold-out gives macro F1 ≈ 0.69
+> ± 0.03. Treat 0.73 as an upper bound, 0.69 as a lower bound for honest
+> generalization. To produce a fully honest test set, see "Held-out evaluation"
+> below.
 
-## 4. Launch the Gradio Demo
+### 2. Build clustering + KNN + SHAP background
 
 ```bash
-/opt/anaconda3/envs/smadex-ci/bin/python demo/app.py
+python3 scripts/build_artifacts.py     # KNN (per-vertical) + UMAP + HDBSCAN + SHAP background
+python3 scripts/name_clusters.py       # deterministic cluster names from modal metadata
 ```
 
-Open **http://localhost:7860** in your browser.
+Total ~30 s. Outputs land at:
+```
+outputs/knn/index.pkl           per-vertical NearestNeighbors indices
+outputs/clusters/labels.parquet (cluster_id, umap_x, umap_y) per creative
+outputs/clusters/cluster_names.parquet
+outputs/shap/background.npz     stratified 32-row SHAP background
+```
 
-### Tab 1 — Creative Analyzer
-Select a creative ID → get performance score, predicted status (top_performer / stable / fatigued / underperformer), SHAP feature contributions, fatigue risk, and feature-level recommendations.
+### 3. (Optional) Extract LLM rubric + teacher annotations via OpenRouter
 
-### Tab 2 — Fatigue Monitor
-Select a campaign → bar chart of fatigue probability per creative. Select a creative → CTR decay curve + rolling fatigue score over time.
-
-### Tab 3 — Creative Recommender
-Select a creative → auto-generated creative brief (what to keep, what to change), similar top-performer gallery, and similarity scores.
-
-### Tab 4 — Campaign Dashboard
-Select a campaign → bar chart of performance scores + CTR vs IPM scatter plot, colored by status.
-
----
-
-## 5. VLM Teacher Labeling with OpenRouter (Optional)
-
-The VLM tab ("VLM Analysis" in the Creative Analyzer) requires pseudo-labels generated by a teacher model and a finetuned SmolVLM student. This step requires an OpenRouter API key (~$0.10 for all 1,080 creatives with Gemini Flash).
-
-### 5a. Get an OpenRouter API key
-Sign up at https://openrouter.ai and create a key.
-
-### 5b. Set the key
 ```bash
 export OPENROUTER_API_KEY=sk-or-...
+python3 scripts/extract_rubric.py --model google/gemini-2.5-flash --workers 64           # ~$0.10, ~5 min
+python3 scripts/label_with_openrouter.py --model google/gemini-2.5-flash --workers 64    # ~$1.50, ~5 min
+python3 scripts/train_all.py        # re-train with the rubric
 ```
 
-Or set it in `config.yaml`:
-```yaml
-openrouter:
-  api_key: "sk-or-..."
-```
+Rubric features go to `outputs/rubric/rubric_scores.parquet` (15 dims × 1080 rows, 0–10 anchored). Natural-language annotations go to `outputs/pseudo_labels/teacher_labels.jsonl`.
 
-### 5c. Dry-run (5 creatives)
+### 4. (Optional) LoRA-finetune SmolVLM for on-the-fly annotations
+
+Only needed if you want a self-contained model that can annotate brand-new
+uploaded creatives without calling OpenRouter. Tested on a single RTX 4090
+(24 GB), takes ~15 min:
+
 ```bash
-/opt/anaconda3/envs/smadex-ci/bin/python scripts/label_with_openrouter.py --dry-run
+python3 scripts/finetune_smolvlm.py --epochs 1 --batch-size 1 --grad-accum 16
 ```
 
-### 5d. Full labeling (~1,080 creatives, ≈$0.10)
+Training distills the cached gemini-2.5-flash JSON annotations into a
+LoRA adapter (r=16, alpha=32, target=q/k/v/o_proj). Loss starts ~13.0 and
+drops to ~0.49. The 39 MB adapter saves to `outputs/models/vlm_finetuned/`.
+The demo's Explain tab shows a "Regenerate via local SmolVLM" button when
+this directory is present.
+
+### 5. Launch the demo
+
 ```bash
-/opt/anaconda3/envs/smadex-ci/bin/python scripts/label_with_openrouter.py
+python3 demo/app.py
 ```
 
-Labels are saved to `outputs/pseudo_labels/teacher_labels.jsonl`. Each label contains `performance_summary`, `visual_strengths`, `visual_weaknesses`, `fatigue_risk_reason`, and `top_recommendation`.
+Open `http://localhost:7860`. Cold start ~1.2s on a warm cache; ~5s on first
+boot if HuggingFace processor needs to download.
 
-**Teacher model options** (set in `config.yaml` under `openrouter.teacher_model`):
+---
 
-| Model | Cost | Notes |
+## Held-out evaluation (recommended for honest numbers)
+
+The committed `qa_report.md` reports **OOF metrics with bias-tuning fit on the
+same OOF data** — there's a documented ~3-pt optimism on macro F1. To get
+honest numbers, run training with a 15% campaign-level held-out test set:
+
+```bash
+# (To be added: scripts/train_all.py --holdout-frac 0.15)
+```
+
+This carves a campaign-stratified 15% split *before* training, never used
+during bias tuning or temperature fitting, and reports metrics on it. Expected
+honest macro F1 ≈ 0.69, top_performer F1 ≈ 0.60, ECE ≈ 0.05.
+
+---
+
+## File map
+
+```
+creative_intelligence/
+├── config.yaml
+├── requirements.txt
+├── INSTRUCTIONS.md (this file)
+├── eval.py                       end-to-end metric + latency report
+├── qa_report.md                  audit findings (held-out caveats inside)
+│
+├── demo/
+│   └── app.py                    Gradio 6-tab UI
+│
+├── scripts/
+│   ├── train_all.py              tabular + fatigue + calibration training
+│   ├── build_artifacts.py        KNN + UMAP/HDBSCAN + SHAP backgrounds
+│   ├── name_clusters.py          deterministic cluster names
+│   ├── extract_rubric.py         OpenRouter rubric scorer (15 dims, cached)
+│   ├── label_with_openrouter.py  OpenRouter teacher annotator (NL JSON, cached)
+│   ├── finetune_smolvlm.py       LoRA SmolVLM-Instruct distillation
+│   └── benchmark_rubric.py       ground-truth eval for picking a teacher model
+│
+├── src/
+│   ├── data/{loader, feature_engineering, early_features, rubric_features,
+│   │         time_series_features}.py
+│   ├── embeddings/clip_encoder.py
+│   ├── models/{tabular_model, fatigue_detector, recommender, vlm_model}.py
+│   ├── calibration/temperature.py        single-scalar temperature scaling
+│   ├── fatigue/{bocpd, health_score}.py  Bayesian CPD + 0-100 health blend
+│   ├── inference/{pipeline, explainer, dpp_recommender, annotations,
+│   │              vlm_inference}.py
+│   └── training/{openrouter_rubric, openrouter_teacher,
+│                 on_policy_distillation, teacher_labeling,
+│                 continual_learning}.py
+│
+├── tests/                        pytest suite (24 cases)
+└── outputs/                      precomputed artifacts (committed)
+```
+
+---
+
+## SOTA / honest-state-of-pipeline
+
+| Component | Verdict | Upgrade path |
 |---|---|---|
-| `google/gemini-2.0-flash-001` | ~$0.10 | Recommended — fast, vision-capable |
-| `openai/gpt-4o-mini` | ~$0.30 | Good quality |
-| `anthropic/claude-3-5-haiku` | ~$0.20 | Strong reasoning |
-| `qwen/qwen2-vl-72b-instruct` | ~$0.25 | Strong vision |
+| XGBoost 5-seed bag (tabular) | 🟢 ON-PAR | TabPFN v2 (Hollmann *Nature* 2025) for n<10k |
+| BOCPD + LightGBM (fatigue) | 🟡 BEHIND | DeepSurv / RSF for time-to-event |
+| Temperature scaling | 🟡 BEHIND | Beta calibration (Kull AISTATS 2017) for trees |
+| **CLIP ViT-B/32 (visual)** | 🔴 **OUTDATED** | **SigLIP 2 base** — single biggest upgrade, propagates to recommender + clusters |
+| NN + MMR (recommender) | 🟡 right-sized | Fast-greedy DPP-MAP (Chen NeurIPS 2018) above ~5k |
+| UMAP + HDBSCAN | 🟢 ON-PAR | nothing urgent |
+| SmolVLM v1 + 1-epoch LoRA | 🟡 BEHIND | SmolVLM2 + 3-5 epochs + MLP target_modules |
+
+See `qa_report.md` for the full audit (statistical rigor, SOTA, production
+readiness).
 
 ---
 
-## 6. VLM Finetuning with SDFT (Optional, Requires GPU)
+## Troubleshooting
 
-Self-Distillation Fine-Tuning (SDFT) — from [arxiv:2601.19897](https://arxiv.org/abs/2601.19897) — prevents catastrophic forgetting by interleaving on-policy student outputs with teacher corrections and a rehearsal buffer.
+**Demo's Cluster Map tab is empty** — by design, the 1080-point UMAP scatter
+is the heaviest render in the demo so it doesn't fire at page load. Click
+the "Render cluster map" button on that tab.
 
+**`AutoModelForImageTextToText` import error** — upgrade transformers:
 ```bash
-/opt/anaconda3/envs/smadex-ci/bin/python scripts/run_pipeline.py
+pip install -U transformers
 ```
+The Path-B SmolVLM finetune needs transformers ≥ 4.45 (it was renamed from
+`AutoModelForVision2Seq`).
 
-**SDFT loop:**
-1. Student (SmolVLM-Instruct) generates an analysis at temperature=0.7
-2. Teacher (OpenRouter) scores it 0–10
-3. If score ≥ 7: student output is kept (on-policy self-confirmation)
-4. If score < 7: teacher re-labels (correction signal)
-5. 20% rehearsal buffer from earlier rounds prevents forgetting
-6. Repeat for `on_policy_rounds` (default: 3)
+**`umap-learn` / `hdbscan` import error** — these are real deps for
+`build_artifacts.py`. Re-run `pip install -r requirements.txt`.
 
-The finetuned checkpoint is saved to `outputs/models/vlm_finetuned/`. The Gradio demo auto-loads it if present.
+**SmolVLM finetune fails with "stack expects each tensor to be equal size"**
+— SmolVLM produces variable image-patch counts per sample. Use
+`--batch-size 1 --grad-accum N` instead of higher batch size (already the
+default).
 
-**LoRA config** (adjustable in `config.yaml`):
-```yaml
-vlm:
-  lora_r: 16
-  lora_alpha: 32
-  lora_dropout: 0.05
-  lora_target_modules: ["q_proj", "v_proj", "k_proj", "o_proj"]
-  num_train_epochs: 3
-  per_device_train_batch_size: 2
-  gradient_accumulation_steps: 8
-```
-
----
-
-## 7. config.yaml Reference
-
-Key sections:
-
-```yaml
-data:
-  root: "../"                   # Path to dataset root (relative to creative_intelligence/)
-
-embeddings:
-  clip_model: "openai/clip-vit-base-patch32"
-  cache_path: "outputs/embeddings/clip_embeddings.npz"
-  pca_components: 32
-
-tabular_model:
-  n_estimators: 300
-  max_depth: 5
-  learning_rate: 0.05
-
-fatigue_model:
-  early_window_days: 7
-  fatigue_score_threshold: 0.5
-
-openrouter:
-  api_key: null                 # Set via OPENROUTER_API_KEY env var
-  teacher_model: "google/gemini-2.0-flash-001"
-  on_policy_score_threshold: 7.0
-  on_policy_rounds: 3
-
-inference:
-  device: "auto"                # "cpu", "cuda", or "auto"
-  top_k_similar: 5
-
-demo:
-  host: "0.0.0.0"
-  port: 7860
-```
-
----
-
-## 8. Troubleshooting
-
-**Segfault (exit 139) when running scripts**  
-Do not use `conda run`. Use the direct Python path:
-```bash
-/opt/anaconda3/envs/smadex-ci/bin/python <script>
-```
-
-**`libomp.dylib` not found (macOS)**
-```bash
-brew install libomp
-```
-
-**Feature shape mismatch error**  
-The models need to be retrained after any change to `feature_engineering.py`. Run `scripts/train_all.py` again.
-
-**CLIP embeddings missing**  
-Embeddings are auto-computed on first run. To force recomputation, delete `outputs/embeddings/clip_embeddings.npz` and re-run `train_all.py`.
-
-**VLM analysis shows "VLM model not loaded"**  
-This is expected without the finetuning step. Complete Steps 5–6 to enable it.
-
-**Port 7860 already in use**
-```bash
-lsof -ti:7860 | xargs kill -9
-```
-Or change `demo.port` in `config.yaml`.
+**OpenRouter rate-limit** — drop `--workers` to 16 or 32.

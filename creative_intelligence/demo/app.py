@@ -638,7 +638,7 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
         # ---- Health Score tab ----
         with gr.Tab("Health Score"):
             gr.Markdown("Pick a creative to get its 0–100 Health Score and recommended action (Scale / Continue / Pivot / Pause).")
-            with gr.Accordion("How to read this view", open=False):
+            with gr.Accordion("How to read this view", open=True):
                 gr.Markdown(HEALTH_INTRO)
             with gr.Accordion("Tech behind this", open=False):
                 gr.Markdown(HEALTH_TECH)
@@ -663,7 +663,7 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
         # ---- Explain tab ----
         with gr.Tab("Explain"):
             gr.Markdown("Why does this creative score where it scores? SHAP feature attributions, rubric callouts, and counterfactual experiments.")
-            with gr.Accordion("How to read this view", open=False):
+            with gr.Accordion("How to read this view", open=True):
                 gr.Markdown(EXPLAIN_INTRO)
             with gr.Accordion("Tech behind this", open=False):
                 gr.Markdown(EXPLAIN_TECH)
@@ -689,7 +689,7 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
         # ---- Recommend tab ----
         with gr.Tab("Recommend"):
             gr.Markdown("Find similar top performers — useful for cloning the visual style of a fatigued creative.")
-            with gr.Accordion("How to read this view", open=False):
+            with gr.Accordion("How to read this view", open=True):
                 gr.Markdown(RECOMMEND_INTRO)
             with gr.Accordion("Tech behind this", open=False):
                 gr.Markdown(RECOMMEND_TECH)
@@ -721,7 +721,7 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
         # ---- Cluster Map tab ----
         with gr.Tab("Cluster Map"):
             gr.Markdown("Visual + behavioral clustering of all 1,080 creatives, projected with UMAP.")
-            with gr.Accordion("How to read this view", open=False):
+            with gr.Accordion("How to read this view", open=True):
                 gr.Markdown(CLUSTER_INTRO)
             with gr.Accordion("Tech behind this", open=False):
                 gr.Markdown(CLUSTER_TECH)
@@ -742,7 +742,7 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
         # ---- Explorer tab ----
         with gr.Tab("Performance Explorer"):
             gr.Markdown("Slice the daily fact table by any combination of dimensions — see lifecycle CTR and ROAS.")
-            with gr.Accordion("How to read this view", open=False):
+            with gr.Accordion("How to read this view", open=True):
                 gr.Markdown(EXPLORER_INTRO)
             with gr.Accordion("Tech behind this", open=False):
                 gr.Markdown(EXPLORER_TECH)

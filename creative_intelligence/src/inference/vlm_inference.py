@@ -45,7 +45,7 @@ class SmolVLMAnalyzer:
         self.model.eval()
 
     @torch.inference_mode()
-    def annotate(self, image_path: str, metadata: Dict, max_new_tokens: int = 350) -> Dict:
+    def annotate(self, image_path: str, metadata: Dict, max_new_tokens: int = 600) -> Dict:
         image = Image.open(image_path).convert("RGB")
         prompt = PROMPT_TEMPLATE.format(**{
             k: metadata.get(k, "")

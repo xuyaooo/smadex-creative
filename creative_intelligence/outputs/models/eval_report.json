@@ -1,0 +1,35 @@
+{
+  "data": {
+    "train": 717,
+    "val": 143,
+    "test": 216,
+    "n_features": 25
+  },
+  "training_seconds_total": 13.14,
+  "best_single_val_model": "catboost",
+  "best_single_val_f1": 0.6259,
+  "temperature": 1.179,
+  "test": {
+    "macro_f1": 0.6345,
+    "weighted_f1": 0.7578,
+    "accuracy": 0.75,
+    "log_loss": 0.58,
+    "ece": 0.06,
+    "auc_top_performer": 0.93,
+    "auc_underperformer": 0.978
+  },
+  "fatigue_4bucket_test_f1": 0.3918,
+  "health_score_spearman": 0.422,
+  "best_per_vertical": {
+    "vertical": "travel",
+    "n": 36,
+    "macro-F1": 0.725,
+    "accuracy": 0.722
+  },
+  "worst_per_vertical": {
+    "vertical": "ecommerce",
+    "n": 36,
+    "macro-F1": 0.41,
+    "accuracy": 0.833
+  }
+}

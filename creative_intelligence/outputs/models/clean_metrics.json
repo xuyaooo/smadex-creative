@@ -1,0 +1,67 @@
+{
+  "data": {
+    "train": 717,
+    "val": 143,
+    "test": 216,
+    "n_features": 25
+  },
+  "timings_seconds": {
+    "xgb_bag_5": 6.61,
+    "lgb": 1.92,
+    "catboost": 2.9,
+    "hgb": 1.67,
+    "logreg": 0.04
+  },
+  "val_macro_f1_per_model": {
+    "xgb_bag": 0.6199,
+    "lgb": 0.5503,
+    "hgb": 0.4869,
+    "logreg": 0.5504,
+    "catboost": 0.6259,
+    "ensemble": 0.5739
+  },
+  "temperature": 1.1786656088319862,
+  "test": {
+    "macro_f1": 0.6345,
+    "weighted_f1": 0.7578,
+    "accuracy": 0.75,
+    "log_loss": 0.58,
+    "ece": 0.06,
+    "confusion_matrix": [
+      [
+        22,
+        11,
+        2,
+        0
+      ],
+      [
+        18,
+        123,
+        3,
+        10
+      ],
+      [
+        3,
+        2,
+        6,
+        0
+      ],
+      [
+        0,
+        5,
+        0,
+        11
+      ]
+    ],
+    "class_names": [
+      "fatigued",
+      "stable",
+      "top_performer",
+      "underperformer"
+    ]
+  },
+  "fatigue_4bucket": {
+    "val_macro_f1": 0.4156,
+    "test_macro_f1": 0.3918
+  }
+}

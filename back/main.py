@@ -1,19 +1,23 @@
 """
 FastAPI backend for the Creative Intelligence demo.
 
-Wraps the same `CreativeIntelligencePipeline` the Gradio demo used, exposing
-JSON endpoints + a static-asset mount so a separate Vue.js front-end (in
-../frontend/) can render the UI.
+Layout (after the 2026-04 restructure):
+    repo/
+    ├── back/main.py        ← this file
+    ├── models/             (notebooks, scripts, src, outputs, config)
+    ├── front/              (React static SPA)
+    └── *.csv               (raw Smadex data)
 
-Run:
-    uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+Run from the repo root:
+    PYTHONPATH=models uvicorn back.main:app --host 0.0.0.0 --port 8000 --reload
 """
 import sys
 from pathlib import Path
 
-# So `from src.inference.pipeline import …` works
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+# Resolve repo layout
+ROOT = Path(__file__).resolve().parent.parent     # repo root
+MODELS = ROOT / "models"                           # notebooks/scripts/src/outputs
+sys.path.insert(0, str(MODELS))                    # so `from src.X import Y` works
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException
@@ -26,13 +30,13 @@ from src.inference.pipeline import CreativeIntelligencePipeline
 
 # ---------------- pipeline (shared, loaded once) ----------------
 print("Booting pipeline...")
-PIPELINE = CreativeIntelligencePipeline(str(ROOT / "config.yaml"))
+PIPELINE = CreativeIntelligencePipeline(str(MODELS / "config.yaml"))
 PIPELINE._ensure_models()
 print("Pipeline ready.")
 
 MASTER = PIPELINE._master_df
 DAILY = PIPELINE._daily_df
-ASSETS_DIR = (ROOT.parent / "assets").resolve()
+ASSETS_DIR = (ROOT / "assets").resolve()
 
 
 # ---------------- FastAPI app ----------------

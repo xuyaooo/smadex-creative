@@ -1,20 +1,44 @@
-# Python
+# --- Python ---
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+*.egg-info/
+.venv/
+venv/
 .pytest_cache/
 
-# OS
+# --- Node / Vite (front-end) ---
+front/node_modules/
+front/dist/
+front/.vite/
+*.log
+
+# --- macOS clutter ---
 .DS_Store
 
-# Per-creative diagnostic dumps (regenerable via qa_visual.py / qa_visual_bulk.py)
-creative_intelligence/qa_visual_*.json
-
-# Local secrets / env (none committed; safety net)
+# --- Local dev ---
 .env
 .env.*
-*.pem
 .git-credentials
-outputs/models/siglip2_finetuned/
-creative_intelligence/notebooks/catboost_info/
-creative_intelligence/catboost_info/
+*.pem
+output.png
+audit_labels.py
+audit_part2.py
+
+# --- ML training byproducts ---
+catboost_info/
+**/catboost_info/
+*.tmp
+*.swp
+
+# --- Large model checkpoints we do NOT commit ---
+models/outputs/models/siglip2_finetuned/
+models/outputs/models/vlm_finetuned/
+
+# --- Per-creative diagnostic dumps (regenerable via qa_visual.py) ---
+models/qa_visual_*.json
+
+# --- IDE ---
+.vscode/
+.idea/

@@ -6,11 +6,11 @@
     "n_features": 25
   },
   "timings_seconds": {
-    "xgb_bag_5": 6.41,
-    "lgb": 2.29,
-    "catboost": 2.96,
-    "hgb": 1.78,
-    "logreg": 0.04
+    "xgb_bag_5": 8.89,
+    "lgb": 2.34,
+    "catboost": 2.83,
+    "hgb": 2.09,
+    "logreg": 0.05
   },
   "val_macro_f1_per_model": {},
   "temperature": 1.0,

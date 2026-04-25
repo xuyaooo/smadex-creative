@@ -1,76 +1,110 @@
-# Smadex Creative Intelligence Challenge Dataset
+# Smadex Creative Intelligence — Hackathon PoC
 
-This is a **fully synthetic** ad-tech dataset created for a hackathon-style "Creative Intelligence" challenge.
-It is intentionally **large enough to feel real**, but still **bounded enough for university teams** to understand in a few minutes.
+A full-stack creative-performance prediction system for mobile advertising creatives, built on the synthetic Smadex Creative Intelligence Challenge dataset (1,076 creatives × 36 advertisers × 6 verticals).
 
-## What teams can build
-- A dashboard to explain why some creatives work better than others
-- A fatigue detector that spots when a creative is wearing out
-- A recommendation engine for the next creative variation to test
-- A lightweight scoring model for creative quality by vertical, country or OS
+## Repo layout
 
-## Recommended framing
-Do **not** treat this like a perfect prediction competition.
-The most interesting projects will combine:
-1. analysis,
-2. simple modeling,
-3. explainability,
-4. a product demo.
+```
+.
+├── README.md                   ← you are here
+├── run.sh                      ← starts back+front in one command
+├── .gitignore
+│
+├── models/                     ← all training & analysis code + saved artefacts
+│   ├── notebooks/              5 executable notebooks (01_…05_)
+│   ├── scripts/                build_clean_dataset.py, train_clean.py, etc.
+│   ├── src/                    shared library (encoders, fatigue, embeddings)
+│   ├── outputs/                splits, trained models, embeddings, rubric, kNN
+│   ├── tests/                  pytest suite
+│   ├── config.yaml
+│   ├── requirements.txt
+│   ├── PIPELINE.md             one-page reference
+│   └── INSTRUCTIONS.md
+│
+├── back/                       ← FastAPI backend (12 endpoints)
+│   └── main.py
+│
+├── front/                      ← React + TypeScript + Vite + Tailwind
+│   ├── src/                    pages: Home / Stats / Explorer / Predict
+│   ├── public/data/            embedded model predictions (works offline)
+│   ├── package.json
+│   └── README.md
+│
+├── assets/                     synthetic creative images
+└── *.csv                       raw Smadex data (not regenerated)
+```
 
-## Files
-- `advertisers.csv`: advertiser-level metadata
-- `campaigns.csv`: campaign setup and targeting
-- `creatives.csv`: creative metadata plus the relative path of each synthetic PNG asset
-- `creative_daily_country_os_stats.csv`: main fact table with one row per date x creative x country x OS
-- `creative_summary.csv`: pre-aggregated creative-level metrics and a synthetic status label
-- `campaign_summary.csv`: pre-aggregated campaign-level metrics
-- `data_dictionary.csv`: column definitions
-- `assets/`: synthetic creative images referenced by `creatives.csv`
+## Quickstart — run back + front in one command
 
-## Dataset size
-- Advertisers: 36
-- Campaigns: 180
-- Creatives: 1,080
-- Daily rows: 192,315
+```bash
+# 1. Install once (≈ 2 minutes)
+pip install -r models/requirements.txt
+(cd front && npm install)
 
-## Join keys
-- `advertisers.advertiser_id = campaigns.advertiser_id`
-- `campaigns.campaign_id = creatives.campaign_id`
-- `creatives.creative_id = creative_daily_country_os_stats.creative_id`
-- `campaigns.campaign_id = creative_daily_country_os_stats.campaign_id`
+# 2. Boot everything
+./run.sh
+```
 
-## Notes
-- All names, apps, assets and metrics are synthetic.
-- The data contains **realistic patterns**, including:
-  - different creative preferences by vertical,
-  - different performance by country and OS,
-  - creative fatigue over time,
-  - uneven spend allocation across creatives.
-- Some columns are engineered summaries meant to make the problem approachable in a hackathon.
-- Hidden generator variables were intentionally excluded from the public files.
+This starts:
 
-## Suggested student tasks
-**Beginner**
-- Rank creatives by performance within a campaign
-- Compare winning traits by vertical
+- **Backend**  — http://localhost:8000   (FastAPI, hot-reload)
+- **Frontend** — http://localhost:5173   (Vite dev server, hot-reload)
 
-**Intermediate**
-- Detect fatigue using the daily table
-- Explain performance drops by feature group
+The frontend is self-contained — it ships with precomputed predictions for all 1,076 creatives, so it works **with or without the backend running**.
 
-**Advanced**
-- Recommend the next creative variation to test for a campaign
-- Build a small copilot that explains creative performance in plain English
+## Reproduce the models from scratch
 
-## Known Quirks
+```bash
+# (1) clean splits from raw CSVs (~5 sec)
+python3 models/scripts/build_clean_dataset.py
 
-**`fatigue_day` is only populated for fatigued creatives.**
-Rows where `creative_status` is `top_performer`, `stable`, or `underperformer` have a blank `fatigue_day`.
-Use `creative_status == "fatigued"` to filter for fatigued creatives — `fatigue_day.notna()` gives the same result but is redundant.
+# (2) train val-tuned baseline (~17 sec)
+python3 models/scripts/train_clean.py
 
-**Portfolio structure is perfectly uniform by design.**
-Every advertiser has exactly 5 campaigns and every campaign has exactly 6 creatives.
-Any "most active advertiser" or "biggest portfolio" analysis will return a tie across all advertisers — focus on performance metrics instead.
+# (3) refit on train ∪ val for production deployment (~20 sec)
+python3 models/scripts/train_clean.py --final
 
-## Caveat
-This dataset is designed for learning, prototyping and demos — not for benchmarking real production models.
+# (4) run the 5 notebooks in order (~3 minutes)
+cd models/notebooks
+for nb in 01_data_audit 02_data_analysis 03_dataset_balancing 04_models 05_evals; do
+    jupyter nbconvert --to notebook --execute ${nb}.ipynb --output ${nb}.ipynb
+done
+```
+
+End-to-end from raw CSVs → trained models → executed notebooks: **~4 minutes** on CPU.
+
+## Headline test metrics (held-out n=216, no temperature scaling)
+
+| Metric | Value |
+|---|---|
+| **macro-F1** | **0.677** |
+| weighted-F1 | 0.781 |
+| accuracy | 0.773 |
+| AUC top_performer | 0.94 |
+| AUC underperformer | 0.98 |
+| Health Score → status Spearman | 0.45 |
+| Fatigue 4-bucket macro-F1 | 0.43 |
+| Per-class F1 | stable 0.84 · fatigued 0.63 · top_performer 0.60 · under 0.63 |
+
+See `models/PIPELINE.md` for the full preprocessing breakdown, model paths, per-vertical numbers, and honest caveats.
+
+## What's in each piece
+
+**`models/`** — 6-model ensemble (XGBoost 5-seed bag, LightGBM, CatBoost, HistGBM, LogReg + soft-vote) trained on cleaned, leakage-free splits. Group-aware StratifiedGroupKFold by `campaign_id`. Notebooks 01–05 cover audit → analysis → balancing → models → evaluation.
+
+**`back/`** — FastAPI app exposing 12 JSON endpoints over the trained pipeline (status prediction, health score, fatigue forecast, per-creative explanations, similarity search). Run via:
+```bash
+PYTHONPATH=models uvicorn back.main:app --reload
+```
+
+**`front/`** — React 18 + TypeScript + Vite + Tailwind + Framer Motion. Four pages: animated landing, stats dashboard, per-creative explorer, live prediction form. Static SPA, deployable to any CDN.
+
+## Honest caveats
+
+- The dataset is **synthetic**. A predict-by-vertical-prior baseline gets ~0.30 macro-F1 for free; our model adds +0.35 macro-F1 on top of that, mostly via early-life CTR aggregates.
+- Top-performer F1 has a 95% CI of [0.31, 0.89] (n=11 in test) — the point estimate is directional.
+- Pause/Pivot tier precision is 0.54 — should run as a *Watch* queue, not autonomous action.
+
+## License
+
+Synthetic data; all names, apps, assets, and metrics are fabricated. For learning, prototyping, and demos — not for production benchmarking.

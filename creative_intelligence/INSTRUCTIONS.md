@@ -1,9 +1,23 @@
-# Smadex Creative Intelligence — Path-B Build
+# Smadex Creative Intelligence — Path-B Build (FastAPI + Vue.js)
 
 A fast, deterministic, no-runtime-LLM creative copilot. One cached "Creative
 Genome" vector powers all 5 challenge paths (Performance Explorer, Fatigue
 Detection, Explainability, Recommendation, Clustering). Cold start ≈ 1–2s,
 per-query latency p95 < 100 ms.
+
+**Stack: FastAPI back-end + Vue 3 single-page front-end.** (The original
+Gradio prototype has been retired.)
+
+## Run the demo
+
+```bash
+pip install -r requirements.txt
+uvicorn backend.main:app --host 0.0.0.0 --port 8000
+# open http://localhost:8000
+```
+
+The single page Vue app (loads Vue 3 + Tailwind + Plotly via CDN, no build
+step) is served at `/` and talks to the FastAPI back-end at `/api/*`.
 
 ---
 

@@ -46,7 +46,7 @@ class CLIPCreativeEncoder:
             inputs = self.processor(images=image, return_tensors="pt").to(self.device)
             feats = self._as_tensor(self.model.get_image_features(**inputs))
             feats = feats / feats.norm(dim=-1, keepdim=True)
-        return feats.squeeze().cpu().numpy().astype(np.float32)
+        return feats.float().squeeze().cpu().numpy()
 
     def encode_batch(self, image_paths: List[str | Path], batch_size: int = 32) -> np.ndarray:
         import torch
@@ -58,7 +58,7 @@ class CLIPCreativeEncoder:
                 inputs = self.processor(images=images, return_tensors="pt", padding=True).to(self.device)
                 feats = self._as_tensor(self.model.get_image_features(**inputs))
                 feats = feats / feats.norm(dim=-1, keepdim=True)
-                all_feats.append(feats.cpu().numpy().astype(np.float32))
+                all_feats.append(feats.float().cpu().numpy())
         return np.concatenate(all_feats, axis=0)
 
     def encode_text(self, text: str) -> np.ndarray:
@@ -67,7 +67,7 @@ class CLIPCreativeEncoder:
             inputs = self.processor(text=[text], return_tensors="pt", padding=True).to(self.device)
             feats = self._as_tensor(self.model.get_text_features(**inputs))
         feats = feats / feats.norm(dim=-1, keepdim=True)
-        return feats.squeeze().cpu().numpy().astype(np.float32)
+        return feats.float().squeeze().cpu().numpy()
 
     def compute_similarity(self, img_emb: np.ndarray, txt_emb: np.ndarray) -> float:
         return float(np.dot(img_emb, txt_emb))

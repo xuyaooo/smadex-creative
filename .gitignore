@@ -15,3 +15,4 @@ creative_intelligence/qa_visual_*.json
 .env.*
 *.pem
 .git-credentials
+outputs/models/siglip2_finetuned/

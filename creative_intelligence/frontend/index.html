@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Smadex Creative Copilot</title>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", sans-serif; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:600; }
+  .pill-top { background:#dcfce7; color:#166534; }
+  .pill-stable { background:#dbeafe; color:#1e40af; }
+  .pill-fatigued { background:#ffedd5; color:#9a3412; }
+  .pill-under { background:#fee2e2; color:#991b1b; }
+  .pill-Scale { background:#dcfce7; color:#166534; }
+  .pill-Continue { background:#dbeafe; color:#1e40af; }
+  .pill-Pivot { background:#ffedd5; color:#9a3412; }
+  .pill-Pause { background:#fee2e2; color:#991b1b; }
+  .scrollbar::-webkit-scrollbar { width: 6px; }
+  .scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+</style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+<div id="app"></div>
+
+<script>
+const { createApp, ref, computed, onMounted, watch, nextTick } = Vue;
+
+const API = window.location.origin.includes(':5173')
+  ? 'http://localhost:8000'   // Vue dev mode → talks to FastAPI on 8000
+  : '';                        // Production → same origin (FastAPI serves the SPA)
+
+const STATUS_PILL = {
+  top_performer: 'pill-top',
+  stable: 'pill-stable',
+  fatigued: 'pill-fatigued',
+  underperformer: 'pill-under',
+};
+
+const STATUS_LABEL = {
+  top_performer: 'Top performer', stable: 'Stable',
+  fatigued: 'Fatigued', underperformer: 'Underperformer',
+};
+
+const ACTION_COLOR = {
+  Scale: '#16a34a', Continue: '#2563eb', Pivot: '#ea580c', Pause: '#dc2626',
+};
+
+const App = {
+  template: `
+<div class="min-h-screen flex">
+  <!-- Sidebar -->
+  <aside class="w-60 bg-white border-r border-gray-200 flex flex-col fixed inset-y-0 left-0 z-10">
+    <div class="px-5 py-5 border-b">
+      <div class="text-xs uppercase tracking-widest text-gray-500 font-semibold">Smadex</div>
+      <div class="text-lg font-bold leading-tight mt-1">Creative Copilot</div>
+    </div>
+    <nav class="flex-1 px-2 py-3 space-y-1 overflow-y-auto scrollbar">
+      <button v-for="t in tabs" :key="t.key"
+              @click="activeTab = t.key"
+              :class="['w-full text-left px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition',
+                       activeTab === t.key ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50']">
+        <span>{{ t.icon }}</span> {{ t.label }}
+      </button>
+    </nav>
+    <div class="px-5 py-3 text-xs text-gray-500 border-t">
+      <div>v1.0 · XGBoost-only at runtime</div>
+      <div class="mt-1">No live LLM · &lt; 100 ms per query</div>
+      <a href="https://github.com/xuyaooo/smadex-creative" target="_blank"
+         class="inline-block mt-2 text-indigo-600 hover:underline">GitHub →</a>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 ml-60 p-8 max-w-7xl">
+    <component :is="activeView" :overview="overview" :dimensions="dimensions"
+               @select-creative="selectCreative" />
+  </main>
+</div>
+  `,
+  setup() {
+    const tabs = [
+      { key: 'home',     label: 'Home',           icon: '🏠' },
+      { key: 'health',   label: 'Health Score',   icon: '🩺' },
+      { key: 'explain',  label: 'Explain',        icon: '🔍' },
+      { key: 'recommend',label: 'Recommend',      icon: '🎯' },
+      { key: 'cluster',  label: 'Cluster Map',    icon: '🌐' },
+      { key: 'explorer', label: 'Explorer',       icon: '📈' },
+    ];
+    const activeTab = ref('home');
+    const overview = ref(null);
+    const dimensions = ref(null);
+
+    onMounted(async () => {
+      overview.value = await fetch(API + '/api/overview').then(r => r.json());
+      dimensions.value = await fetch(API + '/api/dimensions').then(r => r.json());
+    });
+
+    const activeView = computed(() => {
+      return {
+        home: HomeTab, health: HealthTab, explain: ExplainTab,
+        recommend: RecommendTab, cluster: ClusterTab, explorer: ExplorerTab,
+      }[activeTab.value];
+    });
+
+    function selectCreative(cid, target) {
+      activeTab.value = target || 'health';
+      // The selected tab will pick up the cid via a global event.
+      window.dispatchEvent(new CustomEvent('cid-selected', { detail: cid }));
+    }
+
+    return { tabs, activeTab, activeView, overview, dimensions, selectCreative };
+  },
+};
+
+// ---------------- HOME ----------------
+const HomeTab = {
+  props: ['overview'],
+  template: `
+<div>
+  <!-- Hero -->
+  <div class="rounded-2xl text-white p-10 mb-8" style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);">
+    <div class="text-xs uppercase tracking-[0.2em] opacity-80 font-semibold">Smadex Creative Intelligence Challenge</div>
+    <h1 class="text-5xl font-extrabold mt-2 leading-tight">Creative Copilot</h1>
+    <p class="text-lg opacity-95 mt-4 max-w-3xl">
+      Bridge ad imagery and KPIs. One cached "Creative Genome" vector powers
+      health scoring, fatigue detection, explainability, recommendation, and
+      clustering — entirely without live LLM calls.
+    </p>
+    <div class="mt-6 flex flex-wrap gap-2">
+      <span class="bg-white/20 px-4 py-1.5 rounded-full text-sm font-semibold">&lt; 100 ms / query</span>
+      <span class="bg-white/20 px-4 py-1.5 rounded-full text-sm font-semibold">No live LLM</span>
+      <span class="bg-white/20 px-4 py-1.5 rounded-full text-sm font-semibold">24 / 24 tests passing</span>
+      <a href="https://github.com/xuyaooo/smadex-creative" target="_blank"
+         class="bg-white/20 px-4 py-1.5 rounded-full text-sm font-semibold hover:bg-white/30">→ View on GitHub</a>
+    </div>
+  </div>
+
+  <!-- Metric cards -->
+  <div v-if="overview" class="grid grid-cols-4 gap-4 mb-8">
+    <div v-for="(card, i) in metricCards" :key="i"
+         class="bg-white border-l-4 rounded-lg p-5 shadow-sm" :style="'border-color:' + card.color">
+      <div class="text-xs uppercase tracking-wider text-gray-500 font-semibold">{{ card.label }}</div>
+      <div class="text-3xl font-bold mt-1">{{ card.value }}</div>
+    </div>
+  </div>
+
+  <!-- Sections -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <section class="bg-white rounded-xl p-6 shadow-sm">
+      <h2 class="text-lg font-bold mb-3">Why this exists</h2>
+      <p class="text-sm text-gray-700 leading-relaxed">
+        Mobile-ad creatives age fast: a campaign that wins this week loses 30 % of its CTR next week.
+        Marketers know <i>what</i> failed (the metric drop) but not <i>why</i> (the visual reason).
+        We built a single Genome representation that fuses image, metadata, and early behavioral
+        signals — then serve five decision surfaces (score, explain, recommend, cluster, explore)
+        from the same cached vector. Every prediction comes with a marketer-readable reason.
+      </p>
+    </section>
+
+    <section class="bg-white rounded-xl p-6 shadow-sm">
+      <h2 class="text-lg font-bold mb-3">Honest accuracy</h2>
+      <table class="w-full text-sm">
+        <tbody>
+          <tr class="border-b"><td class="py-1.5 text-gray-600">OOF status accuracy</td><td class="py-1.5 text-right font-mono font-semibold">0.79</td></tr>
+          <tr class="border-b"><td class="py-1.5 text-gray-600">OOF macro F1</td><td class="py-1.5 text-right font-mono font-semibold">0.69</td></tr>
+          <tr class="border-b"><td class="py-1.5 text-gray-600">OOF Perf MAE</td><td class="py-1.5 text-right font-mono font-semibold">0.0256</td></tr>
+          <tr class="border-b"><td class="py-1.5 text-gray-600">ECE post-temperature</td><td class="py-1.5 text-right font-mono font-semibold">0.041</td></tr>
+          <tr class="border-b"><td class="py-1.5 text-gray-600">Cluster vertical purity</td><td class="py-1.5 text-right font-mono font-semibold">100 %</td></tr>
+          <tr><td class="py-1.5 text-gray-600">Recommender top-5 same-status lift</td><td class="py-1.5 text-right font-mono font-semibold">1.6× over random</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+
+  <section class="bg-white rounded-xl p-6 shadow-sm mb-8">
+    <h2 class="text-lg font-bold mb-3">Architecture at a glance</h2>
+    <pre class="text-xs leading-relaxed font-mono bg-gray-50 p-4 rounded overflow-x-auto">
+PNG creative                  Tabular metadata          Daily fact table             OpenRouter teacher
+├─ SigLIP-2 ViT-B/16 (2025)   ├─ OneHot/Label/ratios    ├─ first-7-day aggregates    ├─ gemini-2.5-flash
+└─ → 768-d → PCA(64)          └─ 77 dims                └─ 21 dims                   └─ 15-d rubric (0-10)
+                                            │
+                                            ▼
+                            ┌──────────────────────────────┐
+                            │  Creative Genome — 177 dims  │
+                            └──────────────────────────────┘
+                                            │
+              ┌────────────┬────────────┬───┴──────────┬────────────────┐
+              ▼            ▼            ▼              ▼                ▼
+          XGBoost x5    LightGBM    KNN + MMR     UMAP + HDBSCAN    pandas slicer
+          + temperature + BOCPD     (vertical-     (32 named         (192k row
+          + class bias  on daily    scoped)         clusters,         fact table)
+                        CTR                         100 % purity)
+    </pre>
+  </section>
+
+  <section class="bg-white rounded-xl p-6 shadow-sm mb-8">
+    <h2 class="text-lg font-bold mb-3">Tech stack & lineage</h2>
+    <div class="flex flex-wrap gap-2 text-xs">
+      <span v-for="t in techStack" :key="t" class="bg-gray-100 px-3 py-1 rounded-full font-medium">{{ t }}</span>
+    </div>
+  </section>
+
+  <section v-if="overview" class="bg-white rounded-xl p-6 shadow-sm">
+    <h2 class="text-lg font-bold mb-3">Portfolio snapshot</h2>
+    <div ref="statusChart" style="height:280px"></div>
+  </section>
+</div>
+  `,
+  setup(props) {
+    const statusChart = ref(null);
+    const metricCards = computed(() => {
+      const t = props.overview?.totals;
+      if (!t) return [];
+      return [
+        { label: 'Total creatives', value: t.creatives.toLocaleString(), color: '#3498db' },
+        { label: 'Advertisers',     value: t.advertisers.toLocaleString(), color: '#9b59b6' },
+        { label: 'Campaigns',       value: t.campaigns.toLocaleString(), color: '#1abc9c' },
+        { label: 'Avg perf score',  value: t.avg_perf_score.toFixed(3), color: '#2ecc71' },
+      ];
+    });
+    const techStack = [
+      'XGBoost 2016', 'LightGBM 2017', 'TreeSHAP 2017', 'Temperature scaling 2017',
+      'BOCPD 2007', 'PCA 1901', 'UMAP 2018', 'HDBSCAN 2017', 'MMR 1998',
+      'ViT 2021', 'SigLIP-2 2025', 'SmolVLM 2025', 'gemini-2.5-flash 2025',
+      'FastAPI', 'Vue 3', 'Plotly', 'Tailwind',
+    ];
+    watch(() => props.overview, (ov) => {
+      if (!ov) return;
+      nextTick(() => {
+        const sd = ov.status_distribution;
+        const colors = { top_performer:'#16a34a', stable:'#2563eb', fatigued:'#ea580c', underperformer:'#dc2626' };
+        Plotly.newPlot(statusChart.value, [{
+          x: sd.map(s => s.count),
+          y: sd.map(s => STATUS_LABEL[s.status]),
+          orientation: 'h', type: 'bar', text: sd.map(s => s.count),
+          textposition: 'outside',
+          marker: { color: sd.map(s => colors[s.status]) },
+        }], {
+          margin: { l: 120, r: 30, t: 10, b: 40 },
+          plot_bgcolor: 'white', paper_bgcolor: 'white',
+          xaxis: { title: 'Count' },
+        }, { responsive: true, displayModeBar: false });
+      });
+    }, { immediate: true });
+    return { metricCards, techStack, statusChart };
+  },
+};
+
+// ---------------- HEALTH ----------------
+const HealthTab = {
+  template: `
+<div>
+  <h1 class="text-2xl font-bold mb-1">Health Score</h1>
+  <p class="text-gray-600 mb-6">A single 0–100 score and one-word action: Scale / Continue / Pivot / Pause.</p>
+  <div class="flex gap-3 mb-6 items-end">
+    <div>
+      <label class="block text-xs uppercase tracking-wider text-gray-500 font-semibold mb-1">Creative ID</label>
+      <input v-model.number="cid" type="number" class="border rounded px-3 py-2 w-44 font-mono"
+             @keyup.enter="load" />
+    </div>
+    <button @click="load" class="bg-indigo-600 text-white px-5 py-2 rounded font-semibold hover:bg-indigo-700">Score</button>
+  </div>
+
+  <div v-if="loading" class="text-gray-500">Loading...</div>
+  <div v-else-if="error" class="text-red-600 bg-red-50 p-4 rounded">{{ error }}</div>
+  <div v-else-if="data" class="grid grid-cols-3 gap-6">
+    <!-- Image + raw card -->
+    <div class="col-span-1">
+      <img :src="API + '/assets/creative_' + cid + '.png'" class="w-full rounded-lg border bg-white" />
+    </div>
+    <!-- Score card + components -->
+    <div class="col-span-2 space-y-5">
+      <div class="bg-white rounded-xl p-5 shadow-sm flex items-center gap-6">
+        <div class="text-white text-5xl font-extrabold rounded-xl px-6 py-4 min-w-[140px] text-center"
+             :style="'background:' + actionColor">
+          {{ data.health_score }}
+        </div>
+        <div>
+          <div class="text-3xl font-bold" :style="'color:' + actionColor">{{ data.action }}</div>
+          <div class="text-xs uppercase tracking-wider text-gray-500 font-semibold mt-0.5">{{ data.severity }}</div>
+          <div class="text-sm text-gray-700 mt-2">
+            Creative {{ data.creative_id }} · vertical <b>{{ data.vertical }}</b> · day <b>{{ data.days_active }}</b> active
+            <span v-if="data.days_remaining_estimate >= 0">→ predicted <b>{{ data.days_remaining_estimate }}</b> days remaining</span>
+          </div>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl p-5 shadow-sm">
+        <h3 class="font-bold mb-3">Components</h3>
+        <div v-for="(v, k) in data.components" :key="k" class="mb-2">
+          <div class="flex justify-between text-sm mb-1">
+            <span class="text-gray-700">{{ humanComponent(k) }}</span>
+            <span class="font-mono font-semibold">{{ v.toFixed(1) }}</span>
+          </div>
+          <div class="bg-gray-100 rounded-full h-2 overflow-hidden">
+            <div class="bg-indigo-500 h-full" :style="'width:' + v + '%'"></div>
+          </div>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl p-5 shadow-sm">
+        <h3 class="font-bold mb-3">Daily CTR</h3>
+        <div ref="tsChart" style="height:280px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+  `,
+  setup() {
+    const cid = ref(500001);
+    const data = ref(null);
+    const loading = ref(false);
+    const error = ref(null);
+    const tsChart = ref(null);
+    const actionColor = computed(() => ACTION_COLOR[data.value?.action] || '#6b7280');
+    async function load() {
+      loading.value = true; error.value = null;
+      try {
+        const [h, ts] = await Promise.all([
+          fetch(API + '/api/creatives/' + cid.value + '/health').then(r => r.ok ? r.json() : Promise.reject(r)),
+          fetch(API + '/api/creatives/' + cid.value + '/timeseries').then(r => r.json()),
+        ]);
+        data.value = h;
+        await nextTick();
+        if (tsChart.value && ts.rows?.length) {
+          Plotly.newPlot(tsChart.value, [{
+            x: ts.rows.map(r => r.days_since_launch),
+            y: ts.rows.map(r => r.ctr),
+            mode: 'lines+markers', type: 'scatter',
+            line: { color: actionColor.value },
+          }], {
+            margin: { l: 50, r: 30, t: 10, b: 40 },
+            xaxis: { title: 'Day since launch' }, yaxis: { title: 'CTR' },
+          }, { responsive: true, displayModeBar: false });
+        }
+      } catch (e) {
+        error.value = (await (e.json?.() || {}))?.detail || ('Error: ' + e);
+      }
+      loading.value = false;
+    }
+    function humanComponent(k) {
+      return { performance:'Performance', rank_in_vertical:'Rank in vertical',
+               fatigue_resistance:'Fatigue resistance', trajectory:'Trajectory',
+               time_pressure:'Time pressure' }[k] || k;
+    }
+    onMounted(load);
+    window.addEventListener('cid-selected', e => { cid.value = e.detail; load(); });
+    return { cid, data, loading, error, tsChart, actionColor, load, humanComponent, API };
+  },
+};
+
+// ---------------- EXPLAIN ----------------
+const ExplainTab = {
+  template: `
+<div>
+  <h1 class="text-2xl font-bold mb-1">Explain</h1>
+  <p class="text-gray-600 mb-6">Why does this creative score where it scores? SHAP attributions, rubric callouts, counterfactuals.</p>
+  <div class="flex gap-3 mb-6 items-end">
+    <div>
+      <label class="block text-xs uppercase tracking-wider text-gray-500 font-semibold mb-1">Creative ID</label>
+      <input v-model.number="cid" type="number" class="border rounded px-3 py-2 w-44 font-mono" @keyup.enter="load" />
+    </div>
+    <button @click="load" class="bg-indigo-600 text-white px-5 py-2 rounded font-semibold hover:bg-indigo-700">Explain</button>
+  </div>
+  <div v-if="loading" class="text-gray-500">Loading...</div>
+  <div v-else-if="data" class="grid grid-cols-3 gap-6">
+    <div class="col-span-1">
+      <img :src="API + '/assets/creative_' + cid + '.png'" class="w-full rounded-lg border bg-white" />
+    </div>
+    <div class="col-span-2 space-y-4">
+      <div class="bg-white rounded-xl p-5 shadow-sm">
+        <h3 class="font-bold text-lg">{{ data.headline }}</h3>
+        <div class="text-gray-700 mt-1" v-html="data.action_line"></div>
+      </div>
+      <div v-if="data.annotation" class="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-5">
+        <h3 class="font-bold mb-2">Reading the image</h3>
+        <p class="text-sm">{{ data.annotation.performance_summary }}</p>
+        <div v-if="data.annotation.visual_strengths?.length" class="mt-3">
+          <h4 class="font-semibold text-sm mb-1">Visual strengths</h4>
+          <ul class="text-sm list-disc ml-5">
+            <li v-for="(s,i) in data.annotation.visual_strengths" :key="i">{{ s }}</li>
+          </ul>
+        </div>
+        <div v-if="data.annotation.visual_weaknesses?.length" class="mt-3">
+          <h4 class="font-semibold text-sm mb-1">Visual weaknesses</h4>
+          <ul class="text-sm list-disc ml-5">
+            <li v-for="(s,i) in data.annotation.visual_weaknesses" :key="i">{{ s }}</li>
+          </ul>
+        </div>
+        <div v-if="data.annotation.fatigue_risk_reason" class="mt-3 text-sm">
+          <b>Why fatigue risk:</b> {{ data.annotation.fatigue_risk_reason }}
+        </div>
+        <div v-if="data.annotation.top_recommendation" class="mt-3 text-sm">
+          <b>Top recommendation:</b> {{ data.annotation.top_recommendation }}
+        </div>
+      </div>
+      <div class="bg-white rounded-xl p-5 shadow-sm">
+        <h3 class="font-bold mb-3">Top SHAP feature contributions</h3>
+        <div ref="shapChart" style="height:280px"></div>
+      </div>
+      <div class="bg-white rounded-xl p-5 shadow-sm">
+        <h3 class="font-bold mb-2">Suggested experiments (counterfactuals)</h3>
+        <ul class="text-sm space-y-1">
+          <li v-for="(cf,i) in data.counterfactuals" :key="i">→ {{ cf.advice }}</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+  `,
+  setup() {
+    const cid = ref(500001);
+    const data = ref(null);
+    const loading = ref(false);
+    const shapChart = ref(null);
+    async function load() {
+      loading.value = true;
+      data.value = await fetch(API + '/api/creatives/' + cid.value + '/explain').then(r => r.json());
+      await nextTick();
+      const pos = data.value.shap_top_pos || [];
+      const neg = data.value.shap_top_neg || [];
+      const all = [...pos, ...neg].sort((a, b) => a[1] - b[1]);
+      Plotly.newPlot(shapChart.value, [{
+        x: all.map(r => r[1]), y: all.map(r => r[0]),
+        orientation: 'h', type: 'bar',
+        marker: { color: all.map(r => r[1] > 0 ? '#16a34a' : '#dc2626') },
+      }], {
+        margin: { l: 200, r: 30, t: 10, b: 40 },
+        xaxis: { title: 'SHAP contribution' },
+      }, { responsive: true, displayModeBar: false });
+      loading.value = false;
+    }
+    onMounted(load);
+    window.addEventListener('cid-selected', e => { cid.value = e.detail; load(); });
+    return { cid, data, loading, shapChart, load, API };
+  },
+};
+
+// ---------------- RECOMMEND ----------------
+const RecommendTab = {
+  template: `
+<div>
+  <h1 class="text-2xl font-bold mb-1">Recommend</h1>
+  <p class="text-gray-600 mb-6">Find similar top performers — useful for cloning the visual style of a fatigued creative.</p>
+  <div class="flex gap-3 mb-6 items-end flex-wrap">
+    <div>
+      <label class="block text-xs uppercase tracking-wider text-gray-500 font-semibold mb-1">Creative ID</label>
+      <input v-model.number="cid" type="number" class="border rounded px-3 py-2 w-44 font-mono" @keyup.enter="load" />
+    </div>
+    <select v-model="scope" class="border rounded px-3 py-2">
+      <option value="vertical">Same vertical</option>
+      <option value="all">All verticals</option>
+    </select>
+    <label class="flex items-center gap-2"><input type="checkbox" v-model="diversify"> diversify</label>
+    <button @click="load" class="bg-indigo-600 text-white px-5 py-2 rounded font-semibold hover:bg-indigo-700">Find similar</button>
+  </div>
+  <div v-if="data" class="grid grid-cols-6 gap-4">
+    <div class="col-span-1 text-center">
+      <img :src="API + '/assets/creative_' + cid + '.png'" class="w-full rounded-lg border bg-white" />
+      <div class="mt-2 text-xs text-gray-500 uppercase tracking-wider font-semibold">Query</div>
+    </div>
+    <div v-for="r in data.results" :key="r.creative_id" class="col-span-1 text-center cursor-pointer hover:opacity-80"
+         @click="$emit('select-creative', r.creative_id, 'health')">
+      <img :src="API + '/assets/creative_' + r.creative_id + '.png'" class="w-full rounded-lg border bg-white" />
+      <div class="mt-2 text-xs">
+        <span class="font-mono font-semibold">{{ r.creative_id }}</span>
+        <span :class="['ml-1 pill', 'pill-' + r.creative_status.split('_')[0]]">{{ r.creative_status.replace('_', ' ') }}</span>
+      </div>
+      <div class="text-xs text-gray-500">sim {{ r.similarity.toFixed(3) }} · perf {{ r.perf_score.toFixed(3) }}</div>
+    </div>
+  </div>
+</div>
+  `,
+  emits: ['select-creative'],
+  setup() {
+    const cid = ref(500001), scope = ref('vertical'), diversify = ref(false), data = ref(null);
+    async function load() {
+      const url = `${API}/api/creatives/${cid.value}/similar?scope=${scope.value}&diversify=${diversify.value}`;
+      data.value = await fetch(url).then(r => r.json());
+    }
+    onMounted(load);
+    window.addEventListener('cid-selected', e => { cid.value = e.detail; load(); });
+    return { cid, scope, diversify, data, load, API };
+  },
+};
+
+// ---------------- CLUSTER ----------------
+const ClusterTab = {
+  template: `
+<div>
+  <h1 class="text-2xl font-bold mb-1">Cluster Map</h1>
+  <p class="text-gray-600 mb-6">Visual + behavioral clustering of all 1,080 creatives, projected with UMAP.</p>
+  <button @click="load" class="bg-indigo-600 text-white px-5 py-2 rounded font-semibold hover:bg-indigo-700 mb-4">
+    {{ data ? 'Refresh' : 'Render cluster map' }}
+  </button>
+  <div v-if="loading" class="text-gray-500">Building 1080-point UMAP scatter...</div>
+  <div v-if="data" class="bg-white rounded-xl p-5 shadow-sm">
+    <div ref="chart" style="height:600px"></div>
+  </div>
+</div>
+  `,
+  setup() {
+    const data = ref(null), loading = ref(false), chart = ref(null);
+    async function load() {
+      loading.value = true;
+      data.value = await fetch(API + '/api/clusters/map').then(r => r.json());
+      await nextTick();
+      // Group by cluster_name for one trace per cluster
+      const groups = {};
+      for (const p of data.value.points) {
+        if (p.cluster_id < 0) continue;
+        const k = p.cluster_name;
+        groups[k] = groups[k] || { x: [], y: [], cids: [], status: [] };
+        groups[k].x.push(p.umap_x);
+        groups[k].y.push(p.umap_y);
+        groups[k].cids.push(p.creative_id);
+        groups[k].status.push(p.creative_status);
+      }
+      const traces = Object.entries(groups).map(([name, g]) => ({
+        x: g.x, y: g.y, type: 'scattergl', mode: 'markers',
+        name, text: g.cids.map((c, i) => `cid ${c}<br>${g.status[i]}`),
+        hoverinfo: 'text', marker: { size: 6, opacity: 0.7 },
+      }));
+      Plotly.newPlot(chart.value, traces, {
+        margin: { l: 40, r: 200, t: 10, b: 40 }, plot_bgcolor: 'white',
+        legend: { font: { size: 10 } },
+      }, { responsive: true, displayModeBar: false });
+      loading.value = false;
+    }
+    return { data, loading, chart, load };
+  },
+};
+
+// ---------------- EXPLORER ----------------
+const ExplorerTab = {
+  props: ['dimensions'],
+  template: `
+<div>
+  <h1 class="text-2xl font-bold mb-1">Performance Explorer</h1>
+  <p class="text-gray-600 mb-6">Slice the daily fact table by any combination of dimensions — see lifecycle CTR and ROAS.</p>
+  <div v-if="dimensions" class="flex gap-3 mb-6 flex-wrap items-end">
+    <div v-for="dim in ['vertical','format','os_','country']" :key="dim">
+      <label class="block text-xs uppercase tracking-wider text-gray-500 font-semibold mb-1">{{ dim.replace('_','') }}</label>
+      <select v-model="filters[dim]" class="border rounded px-3 py-2">
+        <option value="(all)">(all)</option>
+        <option v-for="v in optsFor(dim)" :key="v" :value="v">{{ v }}</option>
+      </select>
+    </div>
+    <button @click="load" class="bg-indigo-600 text-white px-5 py-2 rounded font-semibold hover:bg-indigo-700">Slice</button>
+  </div>
+  <div v-if="data?.summary" class="grid grid-cols-7 gap-3 mb-6 text-sm">
+    <div v-for="(v,k) in data.summary" :key="k" class="bg-white rounded p-3 shadow-sm">
+      <div class="text-xs uppercase tracking-wider text-gray-500 font-semibold">{{ k.replace('_',' ') }}</div>
+      <div class="font-mono font-semibold mt-0.5">{{ typeof v === 'number' ? v.toLocaleString() : v }}</div>
+    </div>
+  </div>
+  <div class="grid grid-cols-2 gap-6">
+    <div class="bg-white rounded-xl p-5 shadow-sm"><div ref="ctrChart" style="height:300px"></div></div>
+    <div class="bg-white rounded-xl p-5 shadow-sm"><div ref="roasChart" style="height:300px"></div></div>
+  </div>
+</div>
+  `,
+  setup(props) {
+    const filters = ref({ vertical:'(all)', format:'(all)', os_:'(all)', country:'(all)' });
+    const data = ref(null);
+    const ctrChart = ref(null), roasChart = ref(null);
+    function optsFor(dim) {
+      if (!props.dimensions) return [];
+      return { vertical: props.dimensions.verticals, format: props.dimensions.formats,
+               os_: props.dimensions.oses, country: props.dimensions.countries }[dim];
+    }
+    async function load() {
+      const u = new URL(API + '/api/explorer', window.location.origin);
+      for (const k in filters.value) u.searchParams.set(k, filters.value[k]);
+      data.value = await fetch(u.toString()).then(r => r.json());
+      await nextTick();
+      if (data.value.lifecycle?.length) {
+        const xs = data.value.lifecycle.map(r => r.days_since_launch);
+        Plotly.newPlot(ctrChart.value, [{ x: xs, y: data.value.lifecycle.map(r => r.ctr), mode:'lines', type:'scatter' }], {
+          margin: { l:50,r:30,t:30,b:40 }, title:'CTR over creative life',
+        }, { responsive:true, displayModeBar:false });
+        Plotly.newPlot(roasChart.value, [{ x: xs, y: data.value.lifecycle.map(r => r.roas), mode:'lines', type:'scatter', line:{color:'#16a34a'} }], {
+          margin: { l:50,r:30,t:30,b:40 }, title:'ROAS over creative life',
+        }, { responsive:true, displayModeBar:false });
+      }
+    }
+    onMounted(load);
+    return { filters, data, ctrChart, roasChart, load, optsFor };
+  },
+};
+
+createApp(App).mount('#app');
+</script>
+</body>
+</html>

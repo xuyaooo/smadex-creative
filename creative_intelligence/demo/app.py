@@ -705,7 +705,7 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
                             h_life = gr.Plot()
             h_cid.change(tab_health, [h_cid], [h_img, h_md, h_chart, h_cmp, h_life])
             # Defer first render until user clicks the tab — keeps page load fast.
-            tab_health_block.select(tab_health, [h_cid], [h_img, h_md, h_chart, h_cmp, h_life])
+            demo.load(tab_health, [h_cid], [h_img, h_md, h_chart, h_cmp, h_life])
 
         # ---- Explain tab ----
         with gr.Tab("Explain") as tab_explain_block:
@@ -736,7 +736,7 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
                     with gr.Accordion("Suggested counterfactual experiments", open=False):
                         e_cf = gr.Markdown()
             e_cid.change(tab_explain, [e_cid], [e_img, e_headline, e_annot, e_md, e_chart, e_rubric, e_cf])
-            tab_explain_block.select(tab_explain, [e_cid], [e_img, e_headline, e_annot, e_md, e_chart, e_rubric, e_cf])
+            demo.load(tab_explain, [e_cid], [e_img, e_headline, e_annot, e_md, e_chart, e_rubric, e_cf])
             e_vlm_btn.click(tab_explain_vlm, [e_cid], [e_annot])
 
         # ---- Recommend tab ----
@@ -769,7 +769,7 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
             r_cid.change(tab_recommend, [r_cid, r_scope, r_div], [r_img, r_md, r_gallery])
             r_scope.change(tab_recommend, [r_cid, r_scope, r_div], [r_img, r_md, r_gallery])
             r_div.change(tab_recommend, [r_cid, r_scope, r_div], [r_img, r_md, r_gallery])
-            tab_rec_block.select(tab_recommend, [r_cid, r_scope, r_div], [r_img, r_md, r_gallery])
+            demo.load(tab_recommend, [r_cid, r_scope, r_div], [r_img, r_md, r_gallery])
 
         # ---- Cluster Map tab ----
         with gr.Tab("Cluster Map") as tab_cluster_block:
@@ -792,7 +792,7 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
             cluster_pick.change(tab_clusters, [cluster_pick], [cluster_plot, cluster_table])
             # 1080-point UMAP scatter is the heaviest render — only build it when
             # the user actually opens this tab.
-            tab_cluster_block.select(tab_clusters, [cluster_pick], [cluster_plot, cluster_table])
+            demo.load(tab_clusters, [cluster_pick], [cluster_plot, cluster_table])
 
         # ---- Explorer tab ----
         with gr.Tab("Performance Explorer") as tab_explorer_block:
@@ -819,7 +819,7 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
                 ex_summary = gr.Markdown()
             for w in [ex_v, ex_f, ex_o, ex_c]:
                 w.change(tab_explorer, [ex_v, ex_f, ex_o, ex_c], [ex_ctr, ex_roas, ex_summary])
-            tab_explorer_block.select(tab_explorer, [ex_v, ex_f, ex_o, ex_c], [ex_ctr, ex_roas, ex_summary])
+            demo.load(tab_explorer, [ex_v, ex_f, ex_o, ex_c], [ex_ctr, ex_roas, ex_summary])
 
     gr.Markdown(
         "<div style='text-align:center; color:#6b7280; font-size:12px; margin-top:16px;'>"

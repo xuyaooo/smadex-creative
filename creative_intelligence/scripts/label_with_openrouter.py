@@ -34,11 +34,13 @@ from src.training.openrouter_teacher import OpenRouterTeacher
 
 
 AVAILABLE_MODELS = [
-    "google/gemini-2.0-flash-001",       # best value, recommended
-    "google/gemini-flash-1.5",
+    "google/gemini-2.5-flash",           # recommended (best quality/$)
+    "google/gemini-2.5-flash-lite",
+    "google/gemini-2.0-flash-001",
     "openai/gpt-4o-mini",
-    "anthropic/claude-3-5-haiku",
-    "qwen/qwen2-vl-72b-instruct",        # best quality for ad analysis
+    "anthropic/claude-haiku-4.5",
+    "qwen/qwen3-vl-235b-a22b-instruct",
+    "qwen/qwen2.5-vl-72b-instruct",
 ]
 
 
@@ -51,8 +53,10 @@ def main() -> None:
         choices=AVAILABLE_MODELS,
         help="OpenRouter vision model to use as teacher",
     )
-    parser.add_argument("--rpm", type=int, default=20,
-                        help="Requests per minute (adjust to your OpenRouter tier)")
+    parser.add_argument("--rpm", type=int, default=120,
+                        help="Per-thread requests per minute (only used when --workers=1)")
+    parser.add_argument("--workers", type=int, default=64,
+                        help="Concurrent API calls (default 64). Set to 1 for serial.")
     parser.add_argument("--dry-run", action="store_true",
                         help="Label only first 5 creatives to test setup")
     parser.add_argument("--no-resume", action="store_true",
@@ -89,6 +93,7 @@ def main() -> None:
         output_path=output_path,
         resume=not args.no_resume,
         verbose=True,
+        max_workers=args.workers,
     )
 
     n_valid = len(results)

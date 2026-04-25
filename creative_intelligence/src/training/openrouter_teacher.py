@@ -18,7 +18,9 @@ Cost estimate for 1,080 creatives: ~$0.10–$1.50 depending on model.
 import base64
 import json
 import os
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -196,6 +198,7 @@ class OpenRouterTeacher:
         output_path: Path,
         resume: bool = True,
         verbose: bool = True,
+        max_workers: int = 1,
     ) -> List[Dict]:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         existing_ids: set = set()
@@ -211,35 +214,54 @@ class OpenRouterTeacher:
                 print(f"Resuming: {len(existing_ids)} already labeled, "
                       f"{len(master_df) - len(existing_ids)} remaining.")
 
-        results = []
+        # Build the work queue
+        todo: List[Dict] = []
+        for _, row in master_df.iterrows():
+            cid = int(row["creative_id"])
+            if cid in existing_ids:
+                continue
+            if not (asset_dir / f"creative_{cid}.png").exists():
+                continue
+            todo.append({"cid": cid, "row": row.to_dict()})
+
+        results: List[Dict] = []
         n_total = len(master_df)
         n_done = len(existing_ids)
+        write_lock = threading.Lock()
+        out_f = open(output_path, "a")
 
-        with open(output_path, "a") as out_f:
-            for idx, (_, row) in enumerate(master_df.iterrows()):
-                cid = int(row["creative_id"])
-                if cid in existing_ids:
-                    continue
+        def _worker(item: Dict):
+            cid = item["cid"]
+            label = self.label_one(item["row"], asset_dir / f"creative_{cid}.png")
+            return cid, label
 
-                image_path = asset_dir / f"creative_{cid}.png"
-                if not image_path.exists():
-                    continue
-
-                label = self.label_one(row.to_dict(), image_path)
-                n_done += 1
-
-                if label is not None:
-                    record = {"creative_id": cid, "model": self.model, **label}
-                    out_f.write(json.dumps(record) + "\n")
-                    out_f.flush()
-                    results.append(record)
-                    status = "OK"
-                else:
-                    status = "FAILED"
-
-                if verbose and (idx % 10 == 0 or n_done == n_total):
-                    print(f"  [{n_done}/{n_total}] creative_{cid} → {status}")
-
-                time.sleep(self._delay)
-
+        try:
+            if max_workers <= 1:
+                for item in todo:
+                    cid, label = _worker(item)
+                    n_done += 1
+                    if label is not None:
+                        record = {"creative_id": cid, "model": self.model, **label}
+                        out_f.write(json.dumps(record) + "\n")
+                        out_f.flush()
+                        results.append(record)
+                    if verbose and (n_done % 20 == 0 or n_done == n_total):
+                        print(f"  [{n_done}/{n_total}] creative_{cid} → {'OK' if label else 'FAILED'}")
+                    time.sleep(self._delay)
+            else:
+                with ThreadPoolExecutor(max_workers=max_workers) as ex:
+                    futures = {ex.submit(_worker, item): item for item in todo}
+                    for fut in as_completed(futures):
+                        cid, label = fut.result()
+                        with write_lock:
+                            n_done += 1
+                            if label is not None:
+                                record = {"creative_id": cid, "model": self.model, **label}
+                                out_f.write(json.dumps(record) + "\n")
+                                out_f.flush()
+                                results.append(record)
+                            if verbose and (n_done % 20 == 0 or n_done == n_total):
+                                print(f"  [{n_done}/{n_total}] {'OK' if label else 'FAILED'}", flush=True)
+        finally:
+            out_f.close()
         return results

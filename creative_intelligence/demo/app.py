@@ -249,7 +249,7 @@ def tab_health(creative_id: int):
 
 def tab_explain(creative_id: int):
     if creative_id is None:
-        return None, "<i>Pick a creative.</i>", "", None, "", ""
+        return None, "<i>Pick a creative.</i>", "", None, "", "", ""
     creative_id = int(creative_id)
     e = P.explain(creative_id)
     h = e["health"]
@@ -259,6 +259,34 @@ def tab_explain(creative_id: int):
     pill = confidence_pill(p_pred)
 
     headline_md = f"### {e['headline']} &nbsp; {pill}\n{e['action_line']}"
+
+    # Natural-language teacher annotation (precomputed, no LLM at runtime)
+    annot = e.get("annotation")
+    if annot:
+        strengths = "\n".join(f"  - {s}" for s in annot.get("visual_strengths", []))
+        weaknesses = "\n".join(f"  - {w}" for w in annot.get("visual_weaknesses", []))
+        annotation_md = f"""
+<div style="background:#f9fafb; border-left:4px solid #3498db; border-radius:8px;
+            padding:14px 18px; margin-top:8px;">
+
+**Reading the image** &nbsp;<span style="font-size:11px; opacity:0.6;">(distilled from {annot.get('source_model','LLM teacher')})</span>
+
+{annot.get('performance_summary','')}
+
+**Visual strengths**
+{strengths or '_none identified_'}
+
+**Visual weaknesses**
+{weaknesses or '_none identified_'}
+
+**Why fatigue risk** — {annot.get('fatigue_risk_reason','')}
+
+**Top recommendation** — {annot.get('top_recommendation','')}
+
+</div>
+"""
+    else:
+        annotation_md = "_No precomputed annotation available for this creative._"
 
     primary_md = f"""
 **Why it works**
@@ -287,7 +315,7 @@ def tab_explain(creative_id: int):
     else:
         fig = None
 
-    return asset_for(creative_id), headline_md, primary_md, fig, rubric_md, cf_md
+    return asset_for(creative_id), headline_md, annotation_md, primary_md, fig, rubric_md, cf_md
 
 
 def tab_recommend(creative_id: int, scope: str, diversify: bool):
@@ -432,11 +460,160 @@ HEADER_HTML = """
 
 OVERVIEW_INTRO = """
 ### What's in this app
-- **Health Score** — 0–100 score with Scale / Continue / Pivot / Pause action for any creative.
-- **Explain** — SHAP attributions, rubric callouts, and counterfactual experiments.
-- **Recommend** — find the most similar top-performers (vertical-scoped or global, optional diversify).
-- **Cluster Map** — UMAP of the full visual + behavioral genome, named clusters.
+- **Health Score** — 0–100 score with a Scale / Continue / Pivot / Pause action.
+- **Explain** — why the model scored each creative the way it did (SHAP, rubric, counterfactuals).
+- **Recommend** — find the most similar top-performers, optionally diversified.
+- **Cluster Map** — UMAP of the full visual + behavioral genome with named clusters.
 - **Performance Explorer** — slice the daily fact table by vertical / format / OS / country.
+
+### Reading the Overview
+- The four metric cards summarize the entire creative library — how many creatives, advertisers, campaigns, and the average performance score across all of them (0–1 scale, higher = better).
+- The **status distribution** bar chart shows how many creatives currently fall in each lifecycle bucket (top performer, stable, fatigued, underperformer). Roughly 4% are top, 68% stable, 19% fatigued, 9% under — a long-tail shape typical of ad portfolios.
+- The **vertical donut** shows the mix of advertiser industries; every vertical has 6 advertisers × 5 campaigns × 6 creatives by design.
+"""
+
+HEALTH_INTRO = """
+**What this tab shows.** A single 0–100 *Creative Health Score* per creative plus a one-word marketer action. The score combines five components:
+
+- **Performance** (30%) — the model's predicted perf score (CTR + IPM + ROAS blend) on a 0–100 scale. Conservative by design — we removed the leaky outcome columns post-launch.
+- **Rank in vertical** (25%) — the percentile this creative's predicted perf reaches inside its own vertical. 100 = best in class, 0 = bottom.
+- **Fatigue resistance** (25%) — `100 × (1 − fatigue_probability)`. High = the LightGBM detector thinks the creative still has runway; low = it's tiring out fast.
+- **Trajectory** (10%) — was a *Bayesian changepoint* detected in the daily CTR series? Caps the score if the creative had an abrupt regime shift.
+- **Time pressure** (10%) — predicted days remaining before fatigue hits, scaled into a 0–14-day window.
+
+**How to read the action.** Final action is bucketed by score *and* overridden by calibrated 4-class status probabilities (the override fixes the conservative perf prediction).
+- **Scale** (≥ 75 *or* `p(top_performer) ≥ 0.4` and score ≥ 50) — keep budget, consider boosting.
+- **Continue** (50–75) — running healthily, no change.
+- **Pivot** (25–50) — soft underperform, swap visual/copy axis.
+- **Pause** (< 25 *or* `p(fatigued) ≥ 0.5`) — kill the spend, this is over.
+
+**The two charts** below the components: *Daily CTR* (the actual lifecycle, day-by-day), and *vs vertical mean* (how this creative compares to its peer group on perf, fatigue probability, and predicted days active).
+"""
+
+EXPLAIN_INTRO = """
+**What this tab shows.** Why the model thinks this creative scores the way it does.
+
+- **Reading the image** (top callout) — a precomputed natural-language analysis from a teacher VLM (gemini-2.5-flash, generated once and cached). It calls out concrete visual strengths, weaknesses, why it might fatigue, and the single best change to test. *No LLM is called at runtime — this is a parquet lookup.*
+- **Why it works / what to watch** — the top 3 SHAP feature attributions on the perf prediction. Positive contributions push the predicted score UP, negative push it DOWN. Magnitudes (e.g. `+0.112`) are in raw perf-score units.
+- **Top SHAP feature contributions** chart — same, visualized side-by-side. Green = positive, red = negative.
+- **Rubric callouts** (collapsed) — the LLM-rated 0–10 scores on 15 visual dimensions (CTA prominence, color vibrancy, urgency signal, …). We surface only extremes (≥7 strong, ≤3 weak) to keep it scannable.
+- **Counterfactuals** (collapsed) — heuristic suggestions of *which rubric axis to raise next*, ranked by importance × room-to-grow.
+
+**How to read the confidence pill** next to the headline: it shows the calibrated probability of the predicted status class, normalized to 0–1. High = the model is confident; low = treat the action as a soft hint.
+"""
+
+RECOMMEND_INTRO = """
+**What this tab shows.** The 5 nearest creatives in the visual genome — useful for "what should my next creative look like?"
+
+- **Similarity** is *cosine* on L2-normalized SigLIP/CLIP visual embeddings, range 0–1 (1 = identical). Anything ≥ 0.95 is essentially a near-duplicate.
+- **Scope** — `Same vertical` restricts the neighbor pool to ads in this advertiser's industry (recommended for "clone the style of a top performer in your space"). `All verticals` opens the search to the full library (useful for finding cross-vertical inspiration).
+- **Diversify slate** — when on, we pull a 30-wide candidate pool, re-rank by `0.7 × similarity + 0.3 × perf`, then run greedy MMR (lambda=0.5) to spread results across visual sub-clusters. Without it, all 5 results often look alike.
+- **Recommendation line** at the bottom of the markdown calls out the highest-perf top performer in the slate as a "clone this style" candidate.
+
+The gallery shows the *query* creative first (labelled QUERY) followed by the 5 returned creatives.
+"""
+
+CLUSTER_INTRO = """
+**What this tab shows.** All 1,080 creatives projected onto a 2-D UMAP map, colored by their HDBSCAN cluster (32 named clusters + a noise bucket).
+
+- **Each dot is one creative.** Hover to see its ID, vertical, and current status. Spatial proximity ≈ visual + behavioral similarity (the model used to cluster sees both image content and 7-day early-life behavior).
+- **Colors = clusters.** Each cluster is named *deterministically* from the modal vertical / format / theme / dominant color of its members (e.g. *Travel · Interstitial · Discount (blue)*). 32 clusters average **99.75% vertical purity** — clusters genuinely correspond to ad styles, not noise.
+- **Outliers / noise** — about 3% of creatives don't belong to any cluster (HDBSCAN's `cluster_id = -1`). These are visual one-offs.
+- **Highlight cluster ID** input — type a cluster ID (0–31) to ring its members on the plot.
+
+The "Top clusters by size" table on the right shows the 10 largest groups so you can spot which styles dominate the library.
+"""
+
+OVERVIEW_TECH = """
+**Data:** 1,080 fully-synthetic mobile-ad creatives across 36 advertisers / 180 campaigns / 6 verticals.
+**Pipeline state:** all artifacts precomputed offline — no LLM calls at runtime, every tab reads from disk in <1 s and serves queries in <100 ms.
+
+| Layer | Source |
+|---|---|
+| Tabular metadata | `creatives.csv` × `campaigns.csv` × `advertisers.csv`, joined into a 70-column master table |
+| Daily fact table | `creative_daily_country_os_stats.csv`, 192,315 rows × 14 columns |
+| Visual embeddings | CLIP ViT-B/32 (Radford et al. ICML 2021), 512-d, PCA-reduced to 32-d, cached `.npz` |
+| Rubric features | gemini-2.5-flash via OpenRouter, 15 0–10 anchored dims, generated **once** for all 1,080 creatives, cached `.parquet` |
+| Natural-language annotations | gemini-2.5-flash via OpenRouter, structured JSON (`performance_summary`, `visual_strengths`, `visual_weaknesses`, `fatigue_risk_reason`, `top_recommendation`), cached JSONL |
+"""
+
+HEALTH_TECH = """
+**Models trained for this tab:**
+
+1. **Status classifier** — `XGBClassifier` ensemble of 5 seeds (`{42, 7, 1337, 2024, 99}`), `n_estimators=600`, `max_depth=5`, `learning_rate=0.04`, multi:softprob output over the 4 status classes. Probabilities are averaged across seeds to dampen variance on the rare top_performer class.
+2. **Class imbalance handling** — `compute_sample_weight("balanced")` × extra 1.7× boost on `top_performer` (4.3% of data). Then a 4-D additive log-prob bias is grid-searched on OOF predictions to maximize macro-F1; final bias ≈ `[+1.0, −0.3, +0.1, −0.1]` for `[top, stable, fatigued, under]`.
+3. **Cross-validation** — `StratifiedGroupKFold(n_splits=5)` grouped by `campaign_id` so no campaign appears in both train and val. OOF accuracy 0.80, macro F1 0.73.
+4. **Calibration** — single-scalar temperature scaling (Guo et al. ICML 2017) fit on OOF probs. ECE drops from 0.075 → 0.021 (~3.5× reduction).
+5. **Fatigue detector** — `LightGBMClassifier(class_weight='balanced')` on 21-dim early-life behavioral features built from the first 7 days of `creative_daily_country_os_stats.csv` (impressions, CTR, IPM, ROAS, completion rate, slope, country/OS diversity).
+6. **Bayesian Online Changepoint Detection** — Adams & MacKay (2007) run-length filter with Normal-Gamma conjugate prior, applied per-creative on the daily CTR series. Threshold tuned at 0.15 to surface only genuine regime shifts.
+
+**Action selection.** Health bands (75/50/25) drive the default action; calibrated `status_probs` then override at the margins (`p(fatigued) ≥ 0.5 → Pause`, `p(top) ≥ 0.4 + score ≥ 50 → Scale`).
+**Per-call latency:** 40–60 ms p50.
+"""
+
+EXPLAIN_TECH = """
+**Why these explanations are fast.** Every signal you see was computed offline and cached.
+
+| Component | Method | When |
+|---|---|---|
+| SHAP attributions | XGBoost `pred_contribs=True` from booster (TreeSHAP, Lundberg et al. NeurIPS 2017) | Per query, sub-ms |
+| Reading-the-image annotation | gemini-2.5-flash teacher via OpenRouter, JSON-mode prompt over the asset PNG | Once at training, cached |
+| Rubric (15 dims, 0–10) | gemini-2.5-flash with anchored examples per dim ("0 = … / 5 = … / 10 = …") | Once at training, cached |
+| Counterfactuals | Heuristic: rank rubric axes by `(8 − current_score) × feature_importance` (DiCE-style, Mothilal et al. FAT* 2020) | Per query, ~1 ms |
+| Confidence pill | Calibrated `predict_proba` from the temperature-scaled status classifier | Per query, ~1 ms |
+
+**Feature matrix the SHAP runs against:** 145-dim genome = 77 tabular OHE/LE features + 21 early-life behavioral aggregates + 15 LLM rubric scores + 32 PCA-CLIP visual components. Trained with **StratifiedGroupKFold(5) + 5-seed bagging + per-class bias tuning** as in the Health Score tab.
+
+The marketer-facing language ("Why it works", "What to watch") is fully **templated** — no live LLM call. The teacher annotation in the colored callout is a *cache lookup* into a 1.5 MB JSONL.
+"""
+
+RECOMMEND_TECH = """
+**How similarity is computed:**
+- **Embedding** — CLIP ViT-B/32 image features (Radford et al. ICML 2021), L2-normalized, 512 dimensions. Computed once for all 1,080 creatives in `outputs/embeddings/clip_embeddings.npz`.
+- **Index** — `sklearn.neighbors.NearestNeighbors(metric='cosine')`, one index per vertical (6) + a global fallback. Precomputed and pickled at `outputs/knn/index.pkl` (~3 MB), loaded into RAM at app startup.
+- **Default mode** — top-k=5 nearest neighbors of the query embedding, returned ranked by cosine similarity.
+- **Diversify mode** — pulls k=30 candidates from the index, re-ranks by `score = 0.7 × cosine_sim + 0.3 × normalized_perf_score` (rewards high-performing similar creatives), then runs greedy MMR (Carbonell & Goldstein, SIGIR 1998) at `λ = 0.5` to spread results across the embedding space. This is a deterministic O(N·k) approximation of a Determinantal Point Process slate (Kulesza & Taskar 2012).
+
+**Eval result on a 150-creative random sample:**
+- Same-status fraction in top-5: **58.93%** (vs **35.81%** random baseline) — a ~1.6× lift.
+- For `top_performer` queries, neighbors average -0.21 below the query's perf in default mode. With `diversify=True`, this gap shrinks to **-0.12** (43% closer to ideal "clone candidates").
+
+**Per-call latency:** 12 ms p50, 13 ms p95.
+"""
+
+CLUSTER_TECH = """
+**How clusters are built (one-time, offline):**
+
+1. **L2-normalize** the 512-d CLIP visual embeddings per creative.
+2. **UMAP** (McInnes et al. 2018) → 2-D map for plotting (`n_neighbors=15`, cosine metric).
+3. **UMAP** → 30-D map for clustering (preserves more structure than 2-D).
+4. **HDBSCAN** (McInnes et al. 2017) on the 30-D projection, `min_cluster_size=15`, `min_samples=5`. HDBSCAN finds clusters of arbitrary shape and density and labels noise points as `-1` — better than k-means for ad libraries where some styles are tight (gaming) and some are diffuse (ecommerce).
+5. **Cluster naming** — *deterministic* (no LLM): for each cluster, take the modal `(vertical, format, theme, dominant_color)` of its members and emit a string like *Travel · Rewarded Video · Discount (orange)*. Mean vertical purity = 99.75%, min = 96.97%.
+
+Cluster IDs and 2-D coords are persisted to `outputs/clusters/labels.parquet` (~30 KB); names to `cluster_names.parquet`. The plot is rendered by Plotly Express with one trace per cluster name.
+
+**Per-call latency:** ~0.1 ms (lookup + plot construction).
+"""
+
+EXPLORER_TECH = """
+**How the slicing works.** No model — this tab is pure pandas.
+
+- **Source** — `creative_daily_country_os_stats.csv` is parsed once at app startup (192,315 rows × 14 columns) into a `pd.DataFrame`. CSV parse takes ~1 second; subsequent slices are sub-second.
+- **Filters** — vertical/format slices first restrict to the matching `creative_ids` from the master table, then `df[df.os == ...]` and `df[df.country == ...]` chain.
+- **Aggregation** — group by `days_since_launch`, sum impressions/clicks/spend/revenue, compute CTR = clicks/impressions and ROAS = revenue/spend per day-since-launch.
+- **Plotting** — Plotly Express line charts; CTR and ROAS share the X axis (day-since-launch) so visual fatigue patterns stand out by eye.
+
+**Slice-summary box** — totals + overall rate aggregates for the chosen filter combination, useful for budget decisions.
+"""
+
+EXPLORER_INTRO = """
+**What this tab shows.** The daily fact table (192,315 rows × `date × creative × country × OS`) sliced by any combination of dimensions.
+
+- **CTR over creative life** plot — average click-through rate by *day since launch*. A flat or rising curve = no fatigue. A sharp drop after week 1–2 = the classic fatigue pattern. Use this with the OS/Country filters to find segments where a creative format ages especially fast.
+- **ROAS over creative life** plot — return on ad spend by day-since-launch. A creative can be CTR-stable but ROAS-falling if conversion quality drops; that's a different fatigue mode.
+- **Slice summary** — totals (impressions, clicks, spend, revenue) and rate aggregates (overall CTR, ROAS) for the filter combination you picked.
+
+Pick a vertical + a country to see how a category performs in a specific market. Set everything to `(all)` to see the global lifecycle curve.
 """
 
 
@@ -454,11 +631,17 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
                 with gr.Column(scale=2):
                     ov_vert = gr.Plot()
             gr.Markdown(OVERVIEW_INTRO)
+            with gr.Accordion("Tech behind this", open=False):
+                gr.Markdown(OVERVIEW_TECH)
             demo.load(overview_metrics, [], [ov_cards, ov_status, ov_vert])
 
         # ---- Health Score tab ----
         with gr.Tab("Health Score"):
             gr.Markdown("Pick a creative to get its 0–100 Health Score and recommended action (Scale / Continue / Pivot / Pause).")
+            with gr.Accordion("How to read this view", open=False):
+                gr.Markdown(HEALTH_INTRO)
+            with gr.Accordion("Tech behind this", open=False):
+                gr.Markdown(HEALTH_TECH)
             with gr.Row():
                 with gr.Column(scale=1, min_width=260):
                     h_cid = gr.Dropdown(
@@ -480,6 +663,10 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
         # ---- Explain tab ----
         with gr.Tab("Explain"):
             gr.Markdown("Why does this creative score where it scores? SHAP feature attributions, rubric callouts, and counterfactual experiments.")
+            with gr.Accordion("How to read this view", open=False):
+                gr.Markdown(EXPLAIN_INTRO)
+            with gr.Accordion("Tech behind this", open=False):
+                gr.Markdown(EXPLAIN_TECH)
             with gr.Row():
                 with gr.Column(scale=1, min_width=260):
                     e_cid = gr.Dropdown(
@@ -489,18 +676,23 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
                     e_img = gr.Image(label="Creative", height=320)
                 with gr.Column(scale=2, min_width=420):
                     e_headline = gr.Markdown()
+                    e_annot = gr.Markdown()
                     e_md = gr.Markdown()
                     e_chart = gr.Plot()
                     with gr.Accordion("Rubric callouts (extreme visual scores)", open=False):
                         e_rubric = gr.Markdown()
                     with gr.Accordion("Suggested counterfactual experiments", open=False):
                         e_cf = gr.Markdown()
-            e_cid.change(tab_explain, [e_cid], [e_img, e_headline, e_md, e_chart, e_rubric, e_cf])
-            demo.load(tab_explain, [e_cid], [e_img, e_headline, e_md, e_chart, e_rubric, e_cf])
+            e_cid.change(tab_explain, [e_cid], [e_img, e_headline, e_annot, e_md, e_chart, e_rubric, e_cf])
+            demo.load(tab_explain, [e_cid], [e_img, e_headline, e_annot, e_md, e_chart, e_rubric, e_cf])
 
         # ---- Recommend tab ----
         with gr.Tab("Recommend"):
             gr.Markdown("Find similar top performers — useful for cloning the visual style of a fatigued creative.")
+            with gr.Accordion("How to read this view", open=False):
+                gr.Markdown(RECOMMEND_INTRO)
+            with gr.Accordion("Tech behind this", open=False):
+                gr.Markdown(RECOMMEND_TECH)
             with gr.Row():
                 with gr.Column(scale=1, min_width=260):
                     r_cid = gr.Dropdown(
@@ -529,6 +721,10 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
         # ---- Cluster Map tab ----
         with gr.Tab("Cluster Map"):
             gr.Markdown("Visual + behavioral clustering of all 1,080 creatives, projected with UMAP.")
+            with gr.Accordion("How to read this view", open=False):
+                gr.Markdown(CLUSTER_INTRO)
+            with gr.Accordion("Tech behind this", open=False):
+                gr.Markdown(CLUSTER_TECH)
             with gr.Row():
                 with gr.Column(scale=1):
                     cluster_pick = gr.Number(
@@ -546,6 +742,10 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
         # ---- Explorer tab ----
         with gr.Tab("Performance Explorer"):
             gr.Markdown("Slice the daily fact table by any combination of dimensions — see lifecycle CTR and ROAS.")
+            with gr.Accordion("How to read this view", open=False):
+                gr.Markdown(EXPLORER_INTRO)
+            with gr.Accordion("Tech behind this", open=False):
+                gr.Markdown(EXPLORER_TECH)
             with gr.Row():
                 ex_v = gr.Dropdown(ALL_VERTICALS, value="(all)", label="Vertical",
                                    info="Filter by ad vertical.")

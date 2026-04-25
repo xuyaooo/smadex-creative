@@ -22,6 +22,7 @@ from src.data.rubric_features import align_rubric
 from src.embeddings.clip_encoder import CLIPCreativeEncoder, EmbeddingCache
 from src.fatigue.bocpd import fatigue_changepoint
 from src.fatigue.health_score import health_score
+from src.inference.annotations import load_annotations
 from src.inference.explainer import counterfactual_suggestion, explain_creative
 from src.models.fatigue_detector import FatigueDetector
 from src.models.recommender import CreativeRecommender
@@ -33,6 +34,7 @@ TEMPERATURE_PATH = "outputs/models/temperature.pkl"
 KNN_PATH = "outputs/knn/index.pkl"
 CLUSTER_LABELS_PATH = "outputs/clusters/labels.parquet"
 CLUSTER_NAMES_PATH = "outputs/clusters/cluster_names.parquet"
+ANNOTATIONS_PATH = "outputs/pseudo_labels/teacher_labels.jsonl"
 
 STATUS_LABELS = ["top_performer", "stable", "fatigued", "underperformer"]
 
@@ -88,6 +90,7 @@ class CreativeIntelligencePipeline:
         self._umap_by_cid: Dict[int, Tuple[float, float]] = {}
         self._rubric_names: List[str] = []
         self._rubric_importance: Dict[str, float] = {}
+        self._annotations: Dict[int, Dict] = {}
 
     def _ensure_data(self) -> None:
         if self._master_df is None:
@@ -167,6 +170,9 @@ class CreativeIntelligencePipeline:
             ndf = pd.read_parquet(names_path)
             self._cluster_names = {int(r.cluster_id): r.name for r in ndf.itertuples(index=False)}
 
+        if not self._annotations:
+            self._annotations = load_annotations(self._root / ANNOTATIONS_PATH)
+
         # Rubric importances — used by counterfactual_suggestion. Read from XGBoost.
         if not self._rubric_importance and self._tabular_model is not None:
             try:
@@ -243,6 +249,12 @@ class CreativeIntelligencePipeline:
             recommendations=recommendations,
             creative_brief=brief,
         )
+
+    def annotation(self, creative_id: int) -> Optional[Dict]:
+        """Natural-language explanation for this creative (precomputed by the teacher).
+        Returns None if no annotation is cached."""
+        self._ensure_models()
+        return self._annotations.get(int(creative_id))
 
     def find_similar(
         self,
@@ -410,6 +422,8 @@ class CreativeIntelligencePipeline:
             rubric_dict, perf_pred, self._rubric_importance, n_top=3
         )
         explanation["health"] = h
+        # Attach the natural-language teacher annotation if available
+        explanation["annotation"] = self._annotations.get(int(creative_id))
         return explanation
 
     def health_score(self, creative_id: int) -> Dict:

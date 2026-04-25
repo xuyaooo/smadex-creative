@@ -1,0 +1,66 @@
+{
+  "rows_excluded": [
+    500204,
+    500594,
+    500665,
+    500959
+  ],
+  "reasons": {
+    "render_bugs": [
+      500204,
+      500594,
+      500959
+    ],
+    "byte_identical_dups": [
+      500665
+    ]
+  },
+  "columns_dropped": {
+    "leakage": [
+      "overall_ctr",
+      "overall_ipm",
+      "overall_roas",
+      "ctr_decay_pct",
+      "overall_cvr",
+      "cvr_decay_pct",
+      "last_7d_ctr",
+      "last_7d_cvr",
+      "peak_rolling_ctr_5",
+      "first_7d_ctr",
+      "first_7d_cvr"
+    ],
+    "vocab_collapse": [
+      "headline",
+      "subhead",
+      "cta_text"
+    ],
+    "low_mi_visual": [
+      "text_density",
+      "readability_score",
+      "brand_visibility_score",
+      "clutter_score",
+      "novelty_score",
+      "faces_count",
+      "product_count",
+      "motion_score"
+    ],
+    "redundant_strings": [
+      "advertiser_name",
+      "app_name",
+      "asset_file"
+    ],
+    "corrupt_rubric_dims": [
+      "cta_prominence",
+      "face_count_visual",
+      "scene_realism"
+    ]
+  },
+  "feature_crosses_added": [
+    "vertical_x_format",
+    "vertical_x_theme"
+  ],
+  "daily_table": {
+    "dropped_column": "impressions_last_7d (was a row-window sum, not a date sum)",
+    "added_column": "impressions_7d (correct rolling-7-day sum per creative+country+os)"
+  }
+}

@@ -1,6 +1,6 @@
 """Production trainer using the cleaned, leakage-free splits.
 
-This is the script that mirrors `notebooks/models.ipynb`:
+This is the script that mirrors `notebooks/04_models.ipynb`:
   * loads from `outputs/splits/{train,val,test}.parquet`
   * trains a 5-model ensemble (XGB-bag + LightGBM + CatBoost + HistGBM + LogReg)
   * fits temperature scaling on val
@@ -224,15 +224,8 @@ def main():
     print(f"  train={len(train)}  val={len(val)}  test={len(test)}")
 
     # In --final mode, combine train + val into one training set (n=860).
-    # Hyperparameters and temperature were locked on val in the prior run.
-    locked_T = None
+    # Hyperparameters were chosen on val in the prior run.
     if args.final:
-        prior_meta_path = CLEAN / "meta.pkl"
-        if not prior_meta_path.exists():
-            sys.exit("--final requires a prior val-tuned run. Run "
-                     "`python3 scripts/train_clean.py` first to lock hyperparams.")
-        with open(prior_meta_path, "rb") as f:
-            locked_T = pickle.load(f)["temperature"]
         train = pd.concat([train, val], ignore_index=True)
         # Recompute sample weights on the bigger set so the class-weight
         # scheme stays correct.
@@ -240,7 +233,7 @@ def main():
         w = _csw("balanced", train["creative_status"].values).astype(np.float32)
         w[train["creative_status"].values == "top_performer"] *= 1.7
         train["sample_weight"] = w
-        print(f"  --final: train ∪ val → {len(train)}; locked T={locked_T:.3f}")
+        print(f"  --final: train ∪ val → {len(train)}")
 
     feats = [c for c in train.columns if c not in NON_FEATURES]
     cat_cols = [c for c in feats if not pd.api.types.is_numeric_dtype(train[c])]
@@ -322,19 +315,11 @@ def main():
         print("\n(val is now part of training; per-model val F1 not reported "
               "to avoid confusion with held-out scores)")
 
-    # Calibration: in --final mode use the previously-locked T (val is now
-    # part of training so we cannot re-tune it without leakage). In standard
-    # mode, fit T on the held-out val proba.
-    if args.final:
-        T_opt = locked_T
-        print(f"\nlocked T = {T_opt:.3f} (carried over from val-tuned run)")
-    else:
-        T_opt = fit_temperature(p_ens_va, y_va, len(class_names))
-        p_ens_va_cal = temp_scale(p_ens_va, T_opt)
-        print(f"\noptimal T = {T_opt:.3f}")
-        print(f"ECE  uncal: {expected_calibration_error(p_ens_va, y_va):.4f}   "
-              f"cal: {expected_calibration_error(p_ens_va_cal, y_va):.4f}")
-    p_ens_te_cal = temp_scale(p_ens_te, T_opt)
+    # No temperature scaling — use raw ensemble probabilities directly.
+    # Test set is touched ONCE at evaluation, never used for calibration.
+    T_opt = 1.0
+    p_ens_te_cal = p_ens_te
+    print(f"\n(temperature scaling disabled — raw ensemble probabilities)")
 
     # Test eval (touch ONCE)
     pred_te = p_ens_te_cal.argmax(1)

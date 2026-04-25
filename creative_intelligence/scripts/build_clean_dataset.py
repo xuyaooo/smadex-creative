@@ -31,7 +31,7 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.utils.class_weight import compute_sample_weight
 
 
-# Drop list pulled from the audit notebook (data_audit.ipynb).
+# Drop list pulled from the audit notebook (01_data_audit.ipynb).
 BAD_RENDERS = [500204, 500594, 500959]   # text-overflow render bugs
 BYTE_DUPS = [500665]                     # duplicate of 500017
 

@@ -6,10 +6,10 @@
     "n_features": 25
   },
   "timings_seconds": {
-    "xgb_bag_5": 6.61,
-    "lgb": 1.92,
-    "catboost": 2.9,
-    "hgb": 1.67,
+    "xgb_bag_5": 6.4,
+    "lgb": 2.07,
+    "catboost": 2.85,
+    "hgb": 1.82,
     "logreg": 0.04
   },
   "val_macro_f1_per_model": {

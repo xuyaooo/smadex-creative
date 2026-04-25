@@ -1,0 +1,19 @@
+{
+  "split_strategy": "StratifiedGroupKFold (campaign_id) \u00d7 stratify on (vertical | creative_status)",
+  "split_sizes": {
+    "train": 717,
+    "val": 143,
+    "test": 216
+  },
+  "train_balanced_subsample_size": 823,
+  "class_balanced_sample_weights": true,
+  "top_performer_extra_boost": 1.7,
+  "n_clusters": 24,
+  "cluster_method": "KMeans (n_init=10, random_state=42) on early-life + tabular features",
+  "no_overlap_check": {
+    "train_val_campaigns": 0,
+    "train_test_campaigns": 0,
+    "val_test_campaigns": 0
+  },
+  "note": "Demo splits \u2014 for production splits with leakage-removed columns and early-life features merged in, run `python3 scripts/build_clean_dataset.py` and consume outputs/splits/."
+}

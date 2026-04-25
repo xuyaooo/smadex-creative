@@ -16,3 +16,5 @@ creative_intelligence/qa_visual_*.json
 *.pem
 .git-credentials
 outputs/models/siglip2_finetuned/
+creative_intelligence/notebooks/catboost_info/
+creative_intelligence/catboost_info/

@@ -5,7 +5,7 @@
     "test": 216,
     "n_features": 25
   },
-  "training_seconds_total": 13.14,
+  "training_seconds_total": 13.18,
   "best_single_val_model": "catboost",
   "best_single_val_f1": 0.6259,
   "temperature": 1.179,

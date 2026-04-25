@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# OS
+.DS_Store
+
+# Per-creative diagnostic dumps (regenerable via qa_visual.py / qa_visual_bulk.py)
+creative_intelligence/qa_visual_*.json
+
+# Local secrets / env (none committed; safety net)
+.env
+.env.*
+*.pem
+.git-credentials

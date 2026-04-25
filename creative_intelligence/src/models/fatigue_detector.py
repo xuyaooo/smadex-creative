@@ -17,10 +17,11 @@ class FatigueDetector:
         self.ts_extractor = TimeSeriesFeatureExtractor()
         self.classifier = lgb.LGBMClassifier(
             n_estimators=200, learning_rate=0.05, num_leaves=31,
-            class_weight="balanced", random_state=42
+            class_weight="balanced", random_state=42, verbose=-1,
         )
         self.regressor = lgb.LGBMRegressor(
-            n_estimators=200, learning_rate=0.05, num_leaves=31, random_state=42
+            n_estimators=200, learning_rate=0.05, num_leaves=31,
+            random_state=42, verbose=-1,
         )
         self._feature_names: List[str] = []
 

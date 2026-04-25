@@ -26,7 +26,7 @@ class DataLoader:
                         "start_date", "end_date"]],
             on="campaign_id", how="left"
         ).merge(
-            advertisers[["advertiser_id", "vertical", "hq_region"]],
+            advertisers[["advertiser_id", "hq_region"]],
             on="advertiser_id", how="left"
         )
 

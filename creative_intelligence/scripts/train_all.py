@@ -119,14 +119,23 @@ def train_tabular():
 
     cache = EmbeddingCache("outputs/embeddings/clip_embeddings.npz")
     embeddings, ids = cache.load()
+    embedding_dim = embeddings.shape[1]                    # 512 for CLIP, 768 for SigLIP-2
     id_to_emb = {cid: embeddings[i] for i, cid in enumerate(ids)}
-    X_clip = np.stack([id_to_emb.get(int(c), np.zeros(512)) for c in df["creative_id"]])
+    X_clip = np.stack([id_to_emb.get(int(c), np.zeros(embedding_dim))
+                       for c in df["creative_id"]])
 
-    pca = PCA(n_components=32)
+    # PCA dim is config-driven; bumping this lets a richer encoder (e.g. SigLIP-2)
+    # actually reach the classifier instead of being squeezed back to 32-d.
+    import yaml
+    with open(CONFIG) as _f:
+        _cfg = yaml.safe_load(_f)
+    n_pca = int(_cfg.get("embeddings", {}).get("pca_components", 32))
+
+    pca = PCA(n_components=n_pca)
     X_clip_r = pca.fit_transform(X_clip)
     X = np.concatenate([X_tab, X_early, X_rubric, X_clip_r], axis=1)
-    feature_names = names + early_names + rubric_names + [f"clip_pc{i}" for i in range(32)]
-    print(f"Feature matrix: {X.shape}")
+    feature_names = names + early_names + rubric_names + [f"clip_pc{i}" for i in range(n_pca)]
+    print(f"Feature matrix: {X.shape}  (CLIP dim={embedding_dim}, PCA→{n_pca})")
 
     # Custom sample weights: sqrt-balanced + top_performer boost.
     sw_status = make_status_weights(y_status)

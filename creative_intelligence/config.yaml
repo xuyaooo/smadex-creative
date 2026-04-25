@@ -12,7 +12,7 @@ embeddings:
   clip_model: "google/siglip2-base-patch16-256"
   cache_path: "outputs/embeddings/clip_embeddings.npz"
   batch_size: 32
-  pca_components: 32
+  pca_components: 64                     # bumped from 32 to let SigLIP-2 768d signal reach the classifier
 
 tabular_model:
   perf_model_path: "outputs/models/xgb_perf.json"

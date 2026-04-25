@@ -1,0 +1,73 @@
+data:
+  root: "../"
+  assets_dir: "../assets"
+  advertisers: "../advertisers.csv"
+  campaigns: "../campaigns.csv"
+  creatives: "../creatives.csv"
+  daily_stats: "../creative_daily_country_os_stats.csv"
+  creative_summary: "../creative_summary.csv"
+  campaign_summary: "../campaign_summary.csv"
+
+embeddings:
+  clip_model: "openai/clip-vit-base-patch32"
+  cache_path: "outputs/embeddings/clip_embeddings.npz"
+  batch_size: 32
+  pca_components: 32
+
+tabular_model:
+  perf_model_path: "outputs/models/xgb_perf.json"
+  status_model_path: "outputs/models/xgb_status.json"
+  n_estimators: 300
+  max_depth: 5
+  learning_rate: 0.05
+  subsample: 0.8
+  colsample_bytree: 0.7
+  cv_splits: 5
+
+fatigue_model:
+  classifier_path: "outputs/models/fatigue_clf.pkl"
+  regressor_path: "outputs/models/fatigue_reg.pkl"
+  early_window_days: 7
+  fatigue_score_threshold: 0.5
+
+openrouter:
+  # API key: set via OPENROUTER_API_KEY env var (preferred) or here
+  api_key: null
+  # Teacher model for labeling — vision-capable, cheap
+  # Options: google/gemini-2.0-flash-001 | openai/gpt-4o-mini | anthropic/claude-3-5-haiku | qwen/qwen2-vl-72b-instruct
+  teacher_model: "google/gemini-2.0-flash-001"
+  requests_per_minute: 20
+  # On-policy SDFT settings
+  on_policy_batch_size: 50        # creatives per distillation round
+  on_policy_score_threshold: 7.0  # teacher score (0-10) above which student output is accepted
+  on_policy_rounds: 3             # number of self-distillation rounds after warmup
+
+vlm:
+  # Student model (finetuned locally with LoRA)
+  student_model: "HuggingFaceTB/SmolVLM-Instruct"
+  student_checkpoint: "outputs/models/vlm_finetuned"
+  pseudo_labels_path: "outputs/pseudo_labels/teacher_labels.jsonl"
+  # LoRA config
+  lora_r: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  lora_target_modules: ["q_proj", "v_proj", "k_proj", "o_proj"]
+  # Training
+  learning_rate: 2.0e-4
+  num_train_epochs: 3
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 8
+  warmup_ratio: 0.1
+  max_seq_length: 512
+  # SDFT continual learning
+  confidence_threshold: 0.85
+  rehearsal_fraction: 0.2
+
+inference:
+  device: "auto"
+  top_k_similar: 5
+
+demo:
+  host: "0.0.0.0"
+  port: 7860
+  share: false

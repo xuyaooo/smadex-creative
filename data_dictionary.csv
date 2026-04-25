@@ -1,0 +1,146 @@
+file_name,column_name,data_type,description
+advertisers.csv,advertiser_id,integer,Unique advertiser identifier
+advertisers.csv,advertiser_name,string,Synthetic advertiser name
+advertisers.csv,vertical,string,Business vertical
+advertisers.csv,hq_region,string,Synthetic headquarters region
+campaigns.csv,campaign_id,integer,Unique campaign identifier
+campaigns.csv,advertiser_id,integer,Foreign key to advertisers.csv
+campaigns.csv,advertiser_name,string,Synthetic advertiser name
+campaigns.csv,app_name,string,Promoted app or product name
+campaigns.csv,vertical,string,Business vertical
+campaigns.csv,objective,string,Primary conversion objective
+campaigns.csv,primary_theme,string,Main creative angle used in the campaign
+campaigns.csv,target_age_segment,string,Primary age segment
+campaigns.csv,target_os,string,Target operating system
+campaigns.csv,countries,string,Pipe-separated target countries
+campaigns.csv,start_date,date,Campaign start date
+campaigns.csv,end_date,date,Campaign end date
+campaigns.csv,daily_budget_usd,float,Approximate daily budget in USD
+campaigns.csv,kpi_goal,string,Main KPI focus used internally by the campaign
+creatives.csv,creative_id,int64,Unique creative identifier
+creatives.csv,campaign_id,int64,Foreign key to campaigns.csv
+creatives.csv,advertiser_name,object,Synthetic advertiser name
+creatives.csv,app_name,object,Promoted app or product name
+creatives.csv,vertical,object,Business vertical
+creatives.csv,format,object,Ad format
+creatives.csv,width,int64,Asset width in pixels
+creatives.csv,height,int64,Asset height in pixels
+creatives.csv,language,object,Primary creative language
+creatives.csv,creative_launch_date,object,Date when the creative first becomes active
+creatives.csv,theme,object,Main creative concept/theme
+creatives.csv,hook_type,object,Top-level hook used in the message
+creatives.csv,cta_text,object,Call to action shown in the asset
+creatives.csv,headline,object,Main headline text rendered in the synthetic asset
+creatives.csv,subhead,object,Secondary line rendered in the synthetic asset
+creatives.csv,dominant_color,object,Dominant background color family
+creatives.csv,emotional_tone,object,Overall emotional tone
+creatives.csv,duration_sec,int64,Video or interactive duration in seconds; 0 for static assets
+creatives.csv,text_density,float64,"Approximate share of the visual occupied by text, from 0 to 1"
+creatives.csv,copy_length_chars,int64,Approximate copy length in characters
+creatives.csv,readability_score,float64,Estimated readability score from 0 to 1
+creatives.csv,brand_visibility_score,float64,Estimated brand/logo visibility score from 0 to 1
+creatives.csv,clutter_score,float64,Estimated clutter score from 0 to 1
+creatives.csv,novelty_score,float64,Estimated novelty/originality score from 0 to 1
+creatives.csv,motion_score,float64,Estimated motion intensity from 0 to 1
+creatives.csv,faces_count,int64,Count of people/faces visible in the asset
+creatives.csv,product_count,int64,Count of product or food elements shown
+creatives.csv,has_price,int64,1 if a price or monetary offer is visible
+creatives.csv,has_discount_badge,int64,1 if a sale/bonus badge is visible
+creatives.csv,has_gameplay,int64,1 if the creative visibly shows gameplay
+creatives.csv,has_ugc_style,int64,1 if the creative mimics a UGC / creator style layout
+creatives.csv,asset_file,object,Relative path to the synthetic PNG asset
+creative_daily_country_os_stats.csv,date,object,Observation date
+creative_daily_country_os_stats.csv,campaign_id,int64,Foreign key to campaigns.csv
+creative_daily_country_os_stats.csv,creative_id,int64,Foreign key to creatives.csv
+creative_daily_country_os_stats.csv,country,object,Country of delivery
+creative_daily_country_os_stats.csv,os,object,Operating system
+creative_daily_country_os_stats.csv,days_since_launch,int64,How many days the creative has been active on this date
+creative_daily_country_os_stats.csv,impressions_last_7d,int64,Impressions accumulated by this creative in the previous 7 days across all matching rows
+creative_daily_country_os_stats.csv,spend_usd,float64,Spend in USD for this creative-country-OS-day slice
+creative_daily_country_os_stats.csv,impressions,int64,Served impressions
+creative_daily_country_os_stats.csv,viewable_impressions,int64,Estimated viewable impressions
+creative_daily_country_os_stats.csv,clicks,int64,Observed clicks
+creative_daily_country_os_stats.csv,conversions,int64,Observed installs/purchases/signups/bookings/orders depending on campaign objective
+creative_daily_country_os_stats.csv,revenue_usd,float64,Estimated revenue attributed to the observed conversions
+creative_daily_country_os_stats.csv,video_completions,int64,Completed video views; 0 for static formats
+creative_summary.csv,creative_id,int64,Unique creative identifier
+creative_summary.csv,campaign_id,int64,Foreign key to campaigns.csv
+creative_summary.csv,advertiser_name,object,Synthetic advertiser name
+creative_summary.csv,app_name,object,Promoted app or product name
+creative_summary.csv,vertical,object,Business vertical
+creative_summary.csv,format,object,Ad format
+creative_summary.csv,creative_status,object,"Synthetic label: top_performer, stable, fatigued, underperformer"
+creative_summary.csv,fatigue_day,int64,Approximate day number when performance decay became material; blank if not detected
+creative_summary.csv,total_days_active,int64,
+creative_summary.csv,total_spend_usd,float64,
+creative_summary.csv,total_impressions,int64,
+creative_summary.csv,total_clicks,int64,
+creative_summary.csv,total_conversions,int64,
+creative_summary.csv,total_revenue_usd,float64,
+creative_summary.csv,overall_ctr,float64,Clicks / impressions
+creative_summary.csv,overall_cvr,float64,Conversions / clicks
+creative_summary.csv,overall_ipm,float64,"Conversions per 1,000 impressions"
+creative_summary.csv,overall_roas,float64,Revenue / spend
+creative_summary.csv,first_7d_ctr,float64,CTR across the first 7 active days
+creative_summary.csv,last_7d_ctr,float64,CTR across the last 7 active days
+creative_summary.csv,ctr_decay_pct,float64,Relative change between last_7d_ctr and first_7d_ctr
+creative_summary.csv,first_7d_cvr,float64,CVR across the first 7 active days
+creative_summary.csv,last_7d_cvr,float64,CVR across the last 7 active days
+creative_summary.csv,cvr_decay_pct,float64,Relative change between last_7d_cvr and first_7d_cvr
+creative_summary.csv,peak_rolling_ctr_5,float64,Peak 5-day rolling CTR during the early life of the creative
+creative_summary.csv,width,int64,Asset width in pixels
+creative_summary.csv,height,int64,Asset height in pixels
+creative_summary.csv,language,object,Primary creative language
+creative_summary.csv,creative_launch_date,object,Date when the creative first becomes active
+creative_summary.csv,theme,object,Main creative concept/theme
+creative_summary.csv,hook_type,object,Top-level hook used in the message
+creative_summary.csv,cta_text,object,Call to action shown in the asset
+creative_summary.csv,headline,object,Main headline text rendered in the synthetic asset
+creative_summary.csv,subhead,object,Secondary line rendered in the synthetic asset
+creative_summary.csv,dominant_color,object,Dominant background color family
+creative_summary.csv,emotional_tone,object,Overall emotional tone
+creative_summary.csv,duration_sec,int64,Video or interactive duration in seconds; 0 for static assets
+creative_summary.csv,text_density,float64,"Approximate share of the visual occupied by text, from 0 to 1"
+creative_summary.csv,copy_length_chars,int64,Approximate copy length in characters
+creative_summary.csv,readability_score,float64,Estimated readability score from 0 to 1
+creative_summary.csv,brand_visibility_score,float64,Estimated brand/logo visibility score from 0 to 1
+creative_summary.csv,clutter_score,float64,Estimated clutter score from 0 to 1
+creative_summary.csv,novelty_score,float64,Estimated novelty/originality score from 0 to 1
+creative_summary.csv,motion_score,float64,Estimated motion intensity from 0 to 1
+creative_summary.csv,faces_count,int64,Count of people/faces visible in the asset
+creative_summary.csv,product_count,int64,Count of product or food elements shown
+creative_summary.csv,has_price,int64,1 if a price or monetary offer is visible
+creative_summary.csv,has_discount_badge,int64,1 if a sale/bonus badge is visible
+creative_summary.csv,has_gameplay,int64,1 if the creative visibly shows gameplay
+creative_summary.csv,has_ugc_style,int64,1 if the creative mimics a UGC / creator style layout
+creative_summary.csv,asset_file,object,Relative path to the synthetic PNG asset
+creative_summary.csv,peak_day_impressions,int64,
+creative_summary.csv,first_7d_impressions,int64,
+creative_summary.csv,first_7d_clicks,int64,
+creative_summary.csv,first_7d_conversions,int64,
+creative_summary.csv,last_7d_impressions,int64,
+creative_summary.csv,last_7d_clicks,int64,
+creative_summary.csv,last_7d_conversions,int64,
+creative_summary.csv,perf_score,float64,
+campaign_summary.csv,campaign_id,int64,
+campaign_summary.csv,total_spend_usd,float64,
+campaign_summary.csv,total_impressions,int64,
+campaign_summary.csv,total_clicks,int64,
+campaign_summary.csv,total_conversions,int64,
+campaign_summary.csv,total_revenue_usd,float64,
+campaign_summary.csv,advertiser_id,int64,
+campaign_summary.csv,advertiser_name,object,
+campaign_summary.csv,app_name,object,
+campaign_summary.csv,vertical,object,
+campaign_summary.csv,objective,object,
+campaign_summary.csv,primary_theme,object,
+campaign_summary.csv,target_age_segment,object,
+campaign_summary.csv,target_os,object,
+campaign_summary.csv,countries,object,
+campaign_summary.csv,start_date,object,
+campaign_summary.csv,end_date,object,
+campaign_summary.csv,daily_budget_usd,int64,
+campaign_summary.csv,kpi_goal,object,
+campaign_summary.csv,overall_ctr,float64,Clicks / impressions
+campaign_summary.csv,overall_cvr,float64,Conversions / clicks
+campaign_summary.csv,overall_roas,float64,Revenue / spend

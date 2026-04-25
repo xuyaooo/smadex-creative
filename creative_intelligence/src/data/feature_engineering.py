@@ -1,0 +1,126 @@
+from typing import List, Tuple
+
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import LabelEncoder
+
+
+CATEGORICAL_OHE = ["format", "dominant_color", "emotional_tone", "language",
+                   "vertical", "objective", "kpi_goal", "target_os", "hq_region"]
+
+CATEGORICAL_LE = ["theme", "hook_type", "cta_text", "target_age_segment"]
+
+NUMERIC = ["text_density", "readability_score", "brand_visibility_score",
+           "clutter_score", "novelty_score", "motion_score",
+           "faces_count", "product_count", "duration_sec", "copy_length_chars",
+           "daily_budget_usd", "campaign_duration"]
+
+BINARY = ["has_price", "has_discount_badge", "has_gameplay", "has_ugc_style"]
+
+DECAY = ["overall_ctr", "overall_cvr", "overall_ipm", "overall_roas",
+         "ctr_decay_pct", "cvr_decay_pct", "first_7d_ctr", "last_7d_ctr",
+         "peak_rolling_ctr_5", "total_days_active", "total_spend_usd",
+         "total_impressions"]
+
+STATUS_MAP = {"top_performer": 0, "stable": 1, "fatigued": 2, "underperformer": 3}
+
+
+class TabularFeatureEngineer:
+    def __init__(self):
+        self._le: dict[str, LabelEncoder] = {}
+        self._ohe_cols: List[str] = []
+        self._ohe_cols_by_feat: dict[str, List[str]] = {}
+        self._fitted = False
+
+    def fit_transform(self, df: pd.DataFrame) -> Tuple[np.ndarray, List[str]]:
+        features, names = self._build(df, fit=True)
+        self._fitted = True
+        return features, names
+
+    def transform(self, df: pd.DataFrame) -> np.ndarray:
+        features, _ = self._build(df, fit=False)
+        return features
+
+    def _build(self, df: pd.DataFrame, fit: bool) -> Tuple[np.ndarray, List[str]]:
+        parts, names = [], []
+
+        # One-hot encoding
+        for col in CATEGORICAL_OHE:
+            if col not in df.columns:
+                continue
+            dummies = pd.get_dummies(df[col].fillna("unknown"), prefix=col)
+            if fit:
+                self._ohe_cols_by_feat[col] = dummies.columns.tolist()
+                self._ohe_cols.extend(dummies.columns.tolist())
+            else:
+                expected = self._ohe_cols_by_feat.get(col, dummies.columns.tolist())
+                dummies = dummies.reindex(columns=expected, fill_value=0)
+            parts.append(dummies.values.astype(np.float32))
+            names.extend(dummies.columns.tolist())
+
+        # Label encoding
+        for col in CATEGORICAL_LE:
+            if col not in df.columns:
+                continue
+            vals = df[col].fillna("unknown").astype(str)
+            if fit:
+                le = LabelEncoder()
+                encoded = le.fit_transform(vals).reshape(-1, 1)
+                self._le[col] = le
+            else:
+                le = self._le.get(col, LabelEncoder())
+                known = set(le.classes_)
+                safe_vals = vals.map(lambda v: v if v in known else le.classes_[0])
+                encoded = le.transform(safe_vals).reshape(-1, 1)
+            parts.append(encoded.astype(np.float32))
+            names.append(col)
+
+        # Numeric features
+        for col in NUMERIC + DECAY:
+            if col not in df.columns:
+                continue
+            vals = df[col].fillna(0).values.reshape(-1, 1).astype(np.float32)
+            parts.append(vals)
+            names.append(col)
+
+        # Binary flags
+        for col in BINARY:
+            if col not in df.columns:
+                continue
+            vals = df[col].fillna(0).values.reshape(-1, 1).astype(np.float32)
+            parts.append(vals)
+            names.append(col)
+
+        # Engineered ratios
+        clutter = df.get("clutter_score", pd.Series(np.zeros(len(df)))).fillna(0)
+        readability = df.get("readability_score", pd.Series(np.ones(len(df)))).fillna(1).replace(0, 1e-6)
+        novelty = df.get("novelty_score", pd.Series(np.zeros(len(df)))).fillna(0)
+        motion = df.get("motion_score", pd.Series(np.zeros(len(df)))).fillna(0)
+        brand = df.get("brand_visibility_score", pd.Series(np.zeros(len(df)))).fillna(0)
+        aspect = (df.get("width", pd.Series(np.ones(len(df)))).fillna(1) /
+                  df.get("height", pd.Series(np.ones(len(df)))).fillna(1).replace(0, 1e-6))
+
+        engineered = np.stack([
+            (clutter / readability).values,
+            (novelty * motion).values,
+            (brand * (1 - clutter)).values,
+            aspect.values,
+        ], axis=1).astype(np.float32)
+        parts.append(engineered)
+        names.extend(["clutter_readability_ratio", "novelty_motion", "clean_brand_signal", "aspect_ratio"])
+
+        return np.concatenate(parts, axis=1), names
+
+    def get_status_labels(self, df: pd.DataFrame) -> np.ndarray:
+        return df["creative_status"].map(STATUS_MAP).fillna(1).values.astype(int)
+
+    def get_perf_scores(self, df: pd.DataFrame) -> np.ndarray:
+        ctr = df["overall_ctr"].fillna(0)
+        ipm = df["overall_ipm"].fillna(0)
+        roas = df["overall_roas"].fillna(0)
+
+        ctr_n = (ctr - ctr.min()) / (ctr.max() - ctr.min() + 1e-8)
+        ipm_n = (ipm - ipm.min()) / (ipm.max() - ipm.min() + 1e-8)
+        roas_n = (roas - roas.min()) / (roas.max() - roas.min() + 1e-8)
+
+        return (0.4 * ctr_n + 0.4 * ipm_n + 0.2 * roas_n).values.astype(np.float32)

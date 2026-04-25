@@ -6,12 +6,21 @@ from PIL import Image
 
 
 class CLIPCreativeEncoder:
-    def __init__(self, model_name: str = "openai/clip-vit-base-patch32", device: str = "cpu"):
+    """Visual encoder for creative assets.
+
+    Despite the name, the underlying model is now SigLIP 2 (google/siglip2-base-patch16-256)
+    by default. The class name and method surface are kept stable for backwards compatibility
+    with the rest of the pipeline; the model is loaded via AutoModel / AutoProcessor so any
+    HF vision-text dual-encoder (CLIP, SigLIP, SigLIP 2) can be plugged in via config.
+    """
+
+    def __init__(self, model_name: str = "google/siglip2-base-patch16-256", device: str = "cpu"):
         import torch
-        from transformers import CLIPModel, CLIPProcessor
+        from transformers import AutoModel, AutoProcessor
         self.device = torch.device(device if device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu"))
-        self.model = CLIPModel.from_pretrained(model_name).to(self.device).eval()
-        self.processor = CLIPProcessor.from_pretrained(model_name)
+        self.model_name = model_name
+        self.model = AutoModel.from_pretrained(model_name).to(self.device).eval()
+        self.processor = AutoProcessor.from_pretrained(model_name)
         self._torch = torch
 
     @staticmethod

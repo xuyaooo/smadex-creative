@@ -9,7 +9,7 @@ data:
   campaign_summary: "../campaign_summary.csv"
 
 embeddings:
-  clip_model: "openai/clip-vit-base-patch32"
+  clip_model: "google/siglip2-base-patch16-256"
   cache_path: "outputs/embeddings/clip_embeddings.npz"
   batch_size: 32
   pca_components: 32

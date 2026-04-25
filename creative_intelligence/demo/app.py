@@ -684,7 +684,7 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
         # ---- Health Score tab ----
         with gr.Tab("Health Score") as tab_health_block:
             gr.Markdown("Pick a creative to get its 0–100 Health Score and recommended action (Scale / Continue / Pivot / Pause).")
-            with gr.Accordion("How to read this view", open=True):
+            with gr.Accordion("How to read this view", open=False):
                 gr.Markdown(HEALTH_INTRO)
             with gr.Accordion("Tech behind this", open=False):
                 gr.Markdown(HEALTH_TECH)
@@ -710,7 +710,7 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
         # ---- Explain tab ----
         with gr.Tab("Explain") as tab_explain_block:
             gr.Markdown("Why does this creative score where it scores? SHAP feature attributions, rubric callouts, and counterfactual experiments.")
-            with gr.Accordion("How to read this view", open=True):
+            with gr.Accordion("How to read this view", open=False):
                 gr.Markdown(EXPLAIN_INTRO)
             with gr.Accordion("Tech behind this", open=False):
                 gr.Markdown(EXPLAIN_TECH)
@@ -742,7 +742,7 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
         # ---- Recommend tab ----
         with gr.Tab("Recommend") as tab_rec_block:
             gr.Markdown("Find similar top performers — useful for cloning the visual style of a fatigued creative.")
-            with gr.Accordion("How to read this view", open=True):
+            with gr.Accordion("How to read this view", open=False):
                 gr.Markdown(RECOMMEND_INTRO)
             with gr.Accordion("Tech behind this", open=False):
                 gr.Markdown(RECOMMEND_TECH)
@@ -774,7 +774,7 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
         # ---- Cluster Map tab ----
         with gr.Tab("Cluster Map") as tab_cluster_block:
             gr.Markdown("Visual + behavioral clustering of all 1,080 creatives, projected with UMAP.")
-            with gr.Accordion("How to read this view", open=True):
+            with gr.Accordion("How to read this view", open=False):
                 gr.Markdown(CLUSTER_INTRO)
             with gr.Accordion("Tech behind this", open=False):
                 gr.Markdown(CLUSTER_TECH)
@@ -789,15 +789,17 @@ with gr.Blocks(title="Smadex Creative Intelligence") as demo:
                 with gr.Column(scale=2):
                     with gr.Accordion("Top clusters by size", open=True):
                         cluster_table = gr.Markdown()
+            # Manual refresh button — user clicks once to render. Avoids
+            # firing the 1080-point UMAP scatter at page load (heaviest DOM
+            # render in the demo, blocked browser thread on cold start).
+            cluster_refresh = gr.Button("Render cluster map", variant="primary")
             cluster_pick.change(tab_clusters, [cluster_pick], [cluster_plot, cluster_table])
-            # 1080-point UMAP scatter is the heaviest render — only build it when
-            # the user actually opens this tab.
-            demo.load(tab_clusters, [cluster_pick], [cluster_plot, cluster_table])
+            cluster_refresh.click(tab_clusters, [cluster_pick], [cluster_plot, cluster_table])
 
         # ---- Explorer tab ----
         with gr.Tab("Performance Explorer") as tab_explorer_block:
             gr.Markdown("Slice the daily fact table by any combination of dimensions — see lifecycle CTR and ROAS.")
-            with gr.Accordion("How to read this view", open=True):
+            with gr.Accordion("How to read this view", open=False):
                 gr.Markdown(EXPLORER_INTRO)
             with gr.Accordion("Tech behind this", open=False):
                 gr.Markdown(EXPLORER_TECH)

@@ -1,5 +1,5 @@
 """
-Smadex Creative Intelligence — Gradio Demo (Path-B build, v3 polish).
+Smadex Creative Intelligence — Gradio Demo (Path-B build, v3 polish + safe-callbacks).
 
 Six tabs sharing one cached `CreativeIntelligencePipeline`. No LLM at runtime —
 all heavy lifting (rubric extraction, clustering, indices) is precomputed.
@@ -12,7 +12,9 @@ Tabs:
   5. Cluster Map         — interactive UMAP, hover for cluster names + members
   6. Performance Explorer — slice & dice by vertical / country / OS / format
 """
+import functools
 import sys
+import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -107,8 +109,50 @@ def confidence_pill(p: float) -> str:
             f"confidence: {txt} ({p:.2f})</span>")
 
 
+# ---------------- error-safe callback decorator ----------------
+# Without this, any exception inside a tab callback shows up as a generic
+# yellow Gradio "Error" banner with no detail. We catch exceptions and
+# return a markdown error message in the FIRST output slot + None for the
+# rest, so the tab keeps working and the user (or the developer) can see
+# what went wrong.
+
+def safe_callback(default_outputs, error_slot: int = 0):
+    """Wrap a tab callback so exceptions surface as a visible error message.
+
+    `default_outputs` is the fallback shape (one entry per output the callback
+    returns). `error_slot` is the index of the FIRST markdown/HTML output
+    component; the error message goes there.
+    """
+    def deco(fn):
+        @functools.wraps(fn)
+        def wrapped(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as e:
+                # Print full traceback to server log
+                print(f"[tab error] {fn.__name__}({args}, {kwargs})")
+                tb = traceback.format_exc()
+                for line in tb.splitlines():
+                    print(f"  {line}")
+                msg = (f"<div style='background:#fef2f2; border-left:4px solid #ef4444;"
+                       f" border-radius:6px; padding:12px 14px; color:#991b1b;'>"
+                       f"<b>Error in {fn.__name__}</b><br/>"
+                       f"<code style='font-size:12px;'>{type(e).__name__}: {e}</code>"
+                       f"<details style='margin-top:6px;'><summary>traceback</summary>"
+                       f"<pre style='font-size:11px;'>{tb}</pre>"
+                       f"</details></div>")
+                if len(default_outputs) == 1:
+                    return msg
+                out = list(default_outputs)
+                out[error_slot] = msg
+                return tuple(out)
+        return wrapped
+    return deco
+
+
 # ---------------- overview tab ----------------
 
+@safe_callback([None, None, None], error_slot=0)  # slot 0 = ov_cards (HTML)
 def overview_metrics():
     n_creatives = MASTER["creative_id"].nunique()
     n_advertisers = MASTER["advertiser_id"].nunique() if "advertiser_id" in MASTER.columns else 0
@@ -158,6 +202,7 @@ def overview_metrics():
 
 # ---------------- tab callbacks ----------------
 
+@safe_callback([None, None, None, None, None], error_slot=1)  # slot 1 = h_md (HTML)
 def tab_health(creative_id: int):
     if creative_id is None:
         return None, "<i>Pick a creative.</i>", None, None, None
@@ -247,6 +292,7 @@ def tab_health(creative_id: int):
     return asset_for(creative_id), md, fatigue_curve(creative_id), fig_cmp, fig_life
 
 
+@safe_callback([""])
 def tab_explain_vlm(creative_id: int):
     """Regenerate the 'Reading the image' panel using the local SmolVLM LoRA.
     Lazy-loads the model on first call. Returns markdown with the same shape
@@ -283,6 +329,7 @@ def tab_explain_vlm(creative_id: int):
 """
 
 
+@safe_callback([None, "", "", "", None, "", ""], error_slot=1)  # slot 1 = e_headline (Markdown)
 def tab_explain(creative_id: int):
     if creative_id is None:
         return None, "<i>Pick a creative.</i>", "", None, "", "", ""
@@ -354,6 +401,7 @@ def tab_explain(creative_id: int):
     return asset_for(creative_id), headline_md, annotation_md, primary_md, fig, rubric_md, cf_md
 
 
+@safe_callback([None, "", []], error_slot=1)  # slot 1 = r_md (Markdown)
 def tab_recommend(creative_id: int, scope: str, diversify: bool):
     if creative_id is None:
         return None, "<i>Pick a creative.</i>", None
@@ -404,6 +452,7 @@ def tab_recommend(creative_id: int, scope: str, diversify: bool):
     return asset_for(creative_id), "\n".join(md_lines), gallery
 
 
+@safe_callback([None, ""], error_slot=1)  # slot 1 = cluster_table (Markdown)
 def tab_clusters(highlight_cluster: int | None):
     cdf = pd.read_parquet(ROOT / "outputs/clusters/labels.parquet").merge(
         MASTER[["creative_id", "vertical", "creative_status"]], on="creative_id"
@@ -441,6 +490,7 @@ def tab_clusters(highlight_cluster: int | None):
     return fig, summary_md
 
 
+@safe_callback([None, None, ""], error_slot=2)  # slot 2 = ex_summary (Markdown)
 def tab_explorer(vertical: str, fmt: str, os_: str, country: str):
     d = DAILY.copy()
     if vertical != "(all)":

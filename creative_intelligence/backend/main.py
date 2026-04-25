@@ -211,6 +211,16 @@ def cluster_map():
     }
 
 
+@app.get("/api/ablations")
+def ablations():
+    """Full ablation history (the path from leaky baseline → current model)."""
+    import json
+    p = ROOT / "outputs/ablations.json"
+    if not p.exists():
+        return {"runs": []}
+    return json.loads(p.read_text())
+
+
 @app.get("/api/explorer")
 def explorer(
     vertical: str = "(all)",

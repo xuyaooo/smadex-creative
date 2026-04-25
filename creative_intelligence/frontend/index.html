@@ -7,8 +7,32 @@
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", sans-serif; }
+  /* P1: Inter as primary. P36: tabular-nums on numbers globally. */
+  :root {
+    --accent: oklch(0.62 0.19 280);
+    --accent-bg: oklch(0.97 0.04 280);
+  }
+  html { font-feature-settings: 'cv11', 'ss01', 'ss03'; }
+  body {
+    font-family: 'Inter var', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .num, td.num, .metric, code { font-variant-numeric: tabular-nums; }
+  code, .mono { font-family: 'JetBrains Mono', 'Menlo', monospace; }
+  /* P10: 150ms ease-out hover */
+  a, button, .nav-item { transition: all 150ms ease-out; }
+  /* P28: flat with borders, not shadows */
+  .card { background:white; border:1px solid rgb(226 232 240 / 1); border-radius:12px; }
+  /* P11: skeleton shimmer */
+  .skel { animation: shimmer 1.4s ease-in-out infinite; background:linear-gradient(90deg, #e2e8f0 0%, #f1f5f9 50%, #e2e8f0 100%); background-size:200% 100%; border-radius:8px; }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  /* P40: visible focus rings */
+  *:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:6px; }
+  @media (prefers-reduced-motion) { *, *::before, *::after { transition:none !important; animation:none !important; } }
   .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:600; }
   .pill-top { background:#dcfce7; color:#166534; }
   .pill-stable { background:#dbeafe; color:#1e40af; }
@@ -88,6 +112,7 @@ const App = {
       { key: 'recommend',label: 'Recommend',      icon: '🎯' },
       { key: 'cluster',  label: 'Cluster Map',    icon: '🌐' },
       { key: 'explorer', label: 'Explorer',       icon: '📈' },
+      { key: 'benchmarks', label: 'Benchmarks',   icon: '📊' },
     ];
     const activeTab = ref('home');
     const overview = ref(null);
@@ -102,6 +127,7 @@ const App = {
       return {
         home: HomeTab, health: HealthTab, explain: ExplainTab,
         recommend: RecommendTab, cluster: ClusterTab, explorer: ExplorerTab,
+        benchmarks: BenchmarksTab,
       }[activeTab.value];
     });
 
@@ -761,6 +787,204 @@ const ExplorerTab = {
     }
     onMounted(load);
     return { filters, data, ctrChart, roasChart, load, optsFor, techHtml: EXPLORER_TECH };
+  },
+};
+
+// ---------------- BENCHMARKS ----------------
+const TAG_COLOR = {
+  'BASELINE-LEAKED': { bg:'bg-rose-50', text:'text-rose-700', border:'border-rose-200' },
+  'FIX':             { bg:'bg-emerald-50', text:'text-emerald-700', border:'border-emerald-200' },
+  'FEAT':            { bg:'bg-violet-50', text:'text-violet-700', border:'border-violet-200' },
+  'OPT':             { bg:'bg-sky-50', text:'text-sky-700', border:'border-sky-200' },
+  'OPT-INFLATED':    { bg:'bg-amber-50', text:'text-amber-700', border:'border-amber-200' },
+  'CALIB':           { bg:'bg-indigo-50', text:'text-indigo-700', border:'border-indigo-200' },
+  'ENC':             { bg:'bg-teal-50', text:'text-teal-700', border:'border-teal-200' },
+  'ENC-LEAKED':      { bg:'bg-amber-50', text:'text-amber-700', border:'border-amber-200' },
+  'ALT-MODEL':       { bg:'bg-slate-100', text:'text-slate-700', border:'border-slate-200' },
+};
+
+const BenchmarksTab = {
+  template: `
+<div>
+  <h1 class="text-3xl font-bold mb-1 tracking-tight">Benchmarks &amp; Ablation Study</h1>
+  <p class="text-slate-600 mb-6">The path from a leaky 0.0062-MAE baseline to honest 0.025 + macro F1 0.69. Each row is a single change. Inflated runs are flagged in amber.</p>
+
+  <div v-if="!data" class="space-y-3">
+    <div class="skel h-12 w-full"></div>
+    <div class="skel h-12 w-full"></div>
+    <div class="skel h-12 w-full"></div>
+  </div>
+
+  <template v-else>
+    <!-- Headline plot: macro F1 across runs -->
+    <div class="card p-6 mb-6">
+      <h2 class="text-base font-semibold mb-3">Macro F1 progression</h2>
+      <p class="text-xs text-slate-500 mb-4">Honest runs in slate; OOF-tuning- or transduction-inflated runs in amber. Each bar is a single change applied on top of the previous.</p>
+      <div ref="f1Chart" style="height:380px"></div>
+    </div>
+
+    <!-- Two side-by-side smaller plots -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      <div class="card p-6">
+        <h2 class="text-base font-semibold mb-3">Top performer F1 (n=46, the rare class)</h2>
+        <p class="text-xs text-slate-500 mb-4">Where every "improvement" is most fragile. Seed-noise envelope is ±0.05.</p>
+        <div ref="topChart" style="height:340px"></div>
+      </div>
+      <div class="card p-6">
+        <h2 class="text-base font-semibold mb-3">Perf MAE (lower = better)</h2>
+        <p class="text-xs text-slate-500 mb-4">Regressor on the 0.4·CTR + 0.4·IPM + 0.2·ROAS blend, OOF GroupKFold by campaign.</p>
+        <div ref="maeChart" style="height:340px"></div>
+      </div>
+    </div>
+
+    <!-- Tag legend -->
+    <div class="card p-5 mb-6">
+      <div class="text-xs uppercase tracking-wider font-semibold text-slate-500 mb-3">Run categories</div>
+      <div class="flex flex-wrap gap-2 text-xs">
+        <span v-for="(v, k) in data.tag_legend" :key="k"
+              :class="['inline-flex items-center px-2.5 py-1 rounded-md font-medium border', tagClass(k)]">
+          <span class="font-mono mr-2">{{ k }}</span> <span class="opacity-80">{{ v }}</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Detailed ablation table -->
+    <div class="card overflow-hidden mb-6">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 border-b border-slate-200">
+          <tr class="text-left text-xs uppercase tracking-wider text-slate-500 font-semibold">
+            <th class="py-3 px-4">#</th>
+            <th class="py-3 px-4">Run</th>
+            <th class="py-3 px-2">Tag</th>
+            <th class="py-3 px-2 text-right">MAE</th>
+            <th class="py-3 px-2 text-right">Status acc</th>
+            <th class="py-3 px-2 text-right">Macro F1</th>
+            <th class="py-3 px-2 text-right">Top F1</th>
+            <th class="py-3 px-2 text-right">ECE</th>
+            <th class="py-3 px-2">Honest?</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          <tr v-for="(r, i) in data.runs" :key="r.id"
+              class="hover:bg-slate-50 num"
+              :class="{'bg-amber-50/40': !r.honest && r.tag !== 'BASELINE-LEAKED'}">
+            <td class="py-2.5 px-4 text-slate-400 font-mono text-xs">{{ r.id }}</td>
+            <td class="py-2.5 px-4 font-medium">
+              <div>{{ r.name }}</div>
+              <div class="text-xs text-slate-500 mt-0.5 max-w-md font-normal">{{ r.notes }}</div>
+            </td>
+            <td class="py-2.5 px-2">
+              <span :class="['inline-block px-2 py-0.5 rounded-md font-mono text-[10px] border', tagClass(r.tag)]">{{ r.tag }}</span>
+            </td>
+            <td class="py-2.5 px-2 text-right tabular-nums">{{ r.perf_mae?.toFixed(4) ?? '—' }}</td>
+            <td class="py-2.5 px-2 text-right tabular-nums">{{ r.status_acc?.toFixed(2) ?? '—' }}</td>
+            <td class="py-2.5 px-2 text-right tabular-nums font-semibold" :class="deltaClass(r, 'macro_f1', i)">{{ r.macro_f1?.toFixed(2) ?? '—' }}</td>
+            <td class="py-2.5 px-2 text-right tabular-nums" :class="deltaClass(r, 'f1_top', i)">{{ r.f1_top?.toFixed(2) ?? '—' }}</td>
+            <td class="py-2.5 px-2 text-right tabular-nums text-slate-500">{{ r.ece_post_temp?.toFixed(3) ?? '—' }}</td>
+            <td class="py-2.5 px-2">
+              <span v-if="r.honest" class="text-emerald-600 font-bold">✓</span>
+              <span v-else class="text-amber-600 font-bold" :title="'Inflated; see notes'">⚠</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Honest baseline callout -->
+    <div class="card p-6 border-l-4 border-amber-400 bg-amber-50/40">
+      <div class="flex items-start gap-3">
+        <div class="text-2xl">⚠️</div>
+        <div>
+          <div class="font-semibold mb-1">Honest baseline</div>
+          <div class="text-sm text-slate-700">
+            For a paper-grade claim, we recommend reporting <code class="mono text-xs bg-white px-1 py-0.5 rounded">v6 — 5-seed bag</code> as the headline (macro F1 <span class="num font-semibold">0.70</span>, MAE <span class="num font-semibold">0.0252</span>) — that's the <i>last</i> run before per-class bias tuning starts inflating numbers on its own validation set.
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+  `,
+  setup() {
+    const data = ref(null);
+    const f1Chart = ref(null);
+    const topChart = ref(null);
+    const maeChart = ref(null);
+
+    function tagClass(tag) {
+      const c = TAG_COLOR[tag] || TAG_COLOR['ALT-MODEL'];
+      return `${c.bg} ${c.text} ${c.border}`;
+    }
+    function deltaClass(run, field, idx) {
+      if (idx === 0 || !data.value) return '';
+      const prev = data.value.runs[idx - 1][field];
+      const cur = run[field];
+      if (prev == null || cur == null) return '';
+      const diff = cur - prev;
+      if (Math.abs(diff) < 0.005) return 'text-slate-700';
+      return diff > 0 ? 'text-emerald-600' : 'text-rose-600';
+    }
+
+    onMounted(async () => {
+      data.value = await fetch(API + '/api/ablations').then(r => r.json());
+      await nextTick();
+      const runs = data.value.runs;
+      const colorByTag = (t) => ({
+        'BASELINE-LEAKED': '#94a3b8',
+        'FIX': '#10b981',
+        'FEAT': '#8b5cf6',
+        'OPT': '#0ea5e9',
+        'OPT-INFLATED': '#f59e0b',
+        'CALIB': '#6366f1',
+        'ENC': '#14b8a6',
+        'ENC-LEAKED': '#f59e0b',
+        'ALT-MODEL': '#64748b',
+      })[t] || '#64748b';
+      const labels = runs.map(r => r.id);
+      const hovers = runs.map(r => `${r.name}<br><span style='opacity:0.7'>${r.notes.slice(0,180)}</span>`);
+
+      Plotly.newPlot(f1Chart.value, [{
+        x: labels, y: runs.map(r => r.macro_f1),
+        type: 'bar', marker: { color: runs.map(r => colorByTag(r.tag)) },
+        text: runs.map(r => r.macro_f1?.toFixed(2)),
+        textposition: 'outside', cliponaxis: false,
+        hovertext: hovers, hoverinfo: 'text',
+      }], {
+        margin: { l: 50, r: 30, t: 20, b: 50 },
+        plot_bgcolor: 'white', paper_bgcolor: 'white',
+        yaxis: { range: [0.4, 1.05], title: 'OOF Macro F1' },
+        xaxis: { title: '' },
+        showlegend: false,
+      }, { responsive: true, displayModeBar: false });
+
+      Plotly.newPlot(topChart.value, [{
+        x: labels, y: runs.map(r => r.f1_top),
+        type: 'bar', marker: { color: runs.map(r => colorByTag(r.tag)) },
+        text: runs.map(r => r.f1_top?.toFixed(2)),
+        textposition: 'outside', cliponaxis: false,
+        hovertext: hovers, hoverinfo: 'text',
+      }], {
+        margin: { l: 50, r: 30, t: 20, b: 50 },
+        plot_bgcolor: 'white', paper_bgcolor: 'white',
+        yaxis: { range: [0, 1.05], title: 'top_performer F1' },
+        showlegend: false,
+      }, { responsive: true, displayModeBar: false });
+
+      Plotly.newPlot(maeChart.value, [{
+        x: labels, y: runs.map(r => r.perf_mae),
+        type: 'bar', marker: { color: runs.map(r => colorByTag(r.tag)) },
+        text: runs.map(r => r.perf_mae?.toFixed(4)),
+        textposition: 'outside', cliponaxis: false,
+        hovertext: hovers, hoverinfo: 'text',
+      }], {
+        margin: { l: 60, r: 30, t: 20, b: 50 },
+        plot_bgcolor: 'white', paper_bgcolor: 'white',
+        yaxis: { type: 'log', title: 'OOF Perf MAE (log scale)' },
+        showlegend: false,
+      }, { responsive: true, displayModeBar: false });
+    });
+
+    return { data, f1Chart, topChart, maeChart, tagClass, deltaClass };
   },
 };
 

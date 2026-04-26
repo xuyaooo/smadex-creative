@@ -147,3 +147,5 @@ See `models/PIPELINE.md` for the full breakdown of the tabular ensemble (preproc
 ## License
 
 Synthetic data; all names, apps, assets, and metrics are fabricated. For learning, prototyping, and demos — not for production benchmarking.
+
+<sub><i>Note: where self-hosting our self-trained models (SmolVLM full fine-tune for analysis, Flux edit LoRA + DPO for rebuilds) isn't feasible — no GPU, no weights mounted, or running the static SPA standalone — the app transparently falls back to third-party equivalents via OpenRouter (Gemini 2.5 Flash Lite for the analysis JSON, Gemini 2.5 Flash Image / Nano Banana for the rebuild). Same prompts, same output schema; only the inference backend changes.</i></sub>

@@ -132,7 +132,7 @@ See `models/PIPELINE.md` for the full breakdown of the tabular ensemble (preproc
 - **Models** — XGBoost · LightGBM · CatBoost · HistGradientBoosting · scikit-learn · SmolVLM · Flux edit · diffusers · peft
 - **Backend** — FastAPI · uvicorn · pandas · pydantic
 - **Frontend** — React 18 · TypeScript · Vite · Tailwind CSS · Framer Motion · React Router · lucide-react
-- **Image-edit** — Gemini 2.5 Flash Image (Nano Banana) via OpenRouter for both training-time positives and runtime inference
+- **Image-edit** — Gemini 2.5 Flash Image (Nano Banana) via OpenRouter for both training-time positives 
 - **Analysis VLM** — Gemini 2.5 Flash Lite via OpenRouter at runtime; SmolVLM 2.2B as the swap-in for offline / on-device
 - **Tests** — Playwright (6 specs covering hero, predict, stats, explorer, mobile)
 

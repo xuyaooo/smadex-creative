@@ -3,13 +3,27 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+  }
   body {
     background:
       radial-gradient(80% 60% at 50% -10%, rgba(99,102,241,0.35), transparent 60%),
       radial-gradient(60% 40% at 90% 110%, rgba(236,72,153,0.2),  transparent 60%),
       #0b1020;
     color: rgb(226 232 240);
+    font-feature-settings: "ss01", "cv11";  /* tighter Inter alts */
   }
+  /* Display headings inherit Bricolage with optical sizing */
+  h1, h2, h3 { font-family: theme('fontFamily.display'); letter-spacing: -0.02em; font-feature-settings: "ss01"; font-variation-settings: "opsz" 96; }
+  /* Tabular figures use JetBrains Mono so count-ups don't jitter widths */
+  .tabular-nums { font-family: theme('fontFamily.mono'); font-feature-settings: "tnum"; letter-spacing: -0.02em; }
   ::selection { background: rgba(99,102,241,0.5); }
 }
 

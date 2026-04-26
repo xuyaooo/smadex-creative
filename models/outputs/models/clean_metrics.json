@@ -6,11 +6,11 @@
     "n_features": 25
   },
   "timings_seconds": {
-    "xgb_bag_5": 6.2,
-    "lgb": 1.99,
-    "catboost": 2.87,
-    "hgb": 1.83,
-    "logreg": 0.04
+    "xgb_bag_5": 8.58,
+    "lgb": 5.28,
+    "catboost": 5.74,
+    "hgb": 3.02,
+    "logreg": 0.03
   },
   "val_macro_f1_per_model": {
     "xgb_bag": 0.6199,
@@ -25,8 +25,8 @@
     "macro_f1": 0.6345,
     "weighted_f1": 0.7578,
     "accuracy": 0.75,
-    "log_loss": 0.5858,
-    "ece": 0.0797,
+    "log_loss": 0.5864,
+    "ece": 0.0781,
     "confusion_matrix": [
       [
         22,

@@ -31,7 +31,7 @@ from src.data.loader import DataLoader
 
 CONFIG_PATH = "config.yaml"
 LABEL_PATH = "outputs/pseudo_labels/teacher_labels.jsonl"
-ASSETS_DIR = "../assets"
+ASSETS_DIR = "../data/assets"
 OUTPUT_DIR = "outputs/models/vlm_finetuned"
 
 PROMPT_TEMPLATE = (

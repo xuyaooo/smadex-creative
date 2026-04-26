@@ -89,6 +89,30 @@ let cachedPredictions: Prediction[] | null = null;
 let cachedMeta: Metadata | null = null;
 let cachedMetrics: FinalMetrics | null = null;
 let cachedEval: EvalReport | null = null;
+let cachedLifecycle: LifecycleCurves | null = null;
+
+export interface LifecycleCurveBucket {
+  vertical: string;
+  pred_status: string;
+  archetype: string;
+  n: number;
+  ctr: number[];
+  imps: number[];
+  roas: number[];
+}
+export interface LifecycleVerticalFallback {
+  vertical: string;
+  n: number;
+  ctr: number[];
+  imps: number[];
+  roas: number[];
+}
+export interface LifecycleCurves {
+  curve_len: number;
+  metrics: Record<string, { mae: number; r2: number }>;
+  buckets: LifecycleCurveBucket[];
+  vertical_fallback: LifecycleVerticalFallback[];
+}
 
 const BASE = (import.meta as any).env?.BASE_URL ?? "/";
 const url = (p: string) => `${BASE}data/${p}`.replace(/\/\//g, "/");
@@ -119,6 +143,94 @@ export async function loadEvalReport(): Promise<EvalReport> {
   const res = await fetch(url("eval_report.json"));
   cachedEval = (await res.json()) as EvalReport;
   return cachedEval;
+}
+
+// ---------- Data-grounded color palettes ----------
+export interface PaletteEntry { hex: string; label: string }
+export interface Palettes {
+  source: string;
+  k_clusters: number;
+  n_top_performers: number;
+  per_vertical: Record<string, PaletteEntry[]>;
+}
+let cachedPalettes: Palettes | null = null;
+export async function loadPalettes(): Promise<Palettes | null> {
+  if (cachedPalettes) return cachedPalettes;
+  try {
+    const res = await fetch(url("palettes.json"));
+    if (!res.ok) return null;
+    cachedPalettes = (await res.json()) as Palettes;
+    return cachedPalettes;
+  } catch {
+    return null;
+  }
+}
+
+export async function loadLifecycleCurves(): Promise<LifecycleCurves | null> {
+  if (cachedLifecycle) return cachedLifecycle;
+  try {
+    const res = await fetch(url("lifecycle_curves.json"));
+    if (!res.ok) return null;
+    cachedLifecycle = (await res.json()) as LifecycleCurves;
+    return cachedLifecycle;
+  } catch {
+    return null;
+  }
+}
+
+/** Map the predicted-fatigue label (4 buckets) onto a lifecycle archetype. */
+export function fatigueToArchetype(predFatigue: string | undefined | null): string | null {
+  switch (predFatigue) {
+    case "never":    return "stable";
+    case "late":     return "late_fatigue";
+    case "standard": return "standard_fatigue";
+    case "early":    return "early_fatigue";
+    default:         return null;
+  }
+}
+
+/** Pick the most specific matching lifecycle curve for a prediction.
+ *
+ * Tiered fallback so two creatives in the same vertical+status but different
+ * predicted fatigue never end up sharing the same curve when better data is
+ * available:
+ *   1. Exact (vertical × pred_status × archetype) match if archetype is known
+ *   2. (vertical × pred_status) — pick the bucket whose archetype most often
+ *      co-occurs with the predicted health/decay
+ *   3. (vertical, *) average
+ *   4. Global vertical fallback
+ */
+export function pickLifecycleCurve(
+  lc: LifecycleCurves,
+  vertical: string,
+  predStatus: string,
+  predFatigue?: string | null,
+): LifecycleCurveBucket | LifecycleVerticalFallback | null {
+  const archetype = fatigueToArchetype(predFatigue);
+
+  if (archetype) {
+    const exact = lc.buckets.find(
+      (b) => b.vertical === vertical && b.pred_status === predStatus && b.archetype === archetype,
+    );
+    if (exact) return exact;
+  }
+
+  // Same status, any archetype — pick the bucket with largest sample size.
+  const sameStatus = lc.buckets
+    .filter((b) => b.vertical === vertical && b.pred_status === predStatus)
+    .sort((a, b) => b.n - a.n);
+  if (sameStatus.length) return sameStatus[0];
+
+  // Same archetype across statuses (rare).
+  if (archetype) {
+    const sameArch = lc.buckets
+      .filter((b) => b.vertical === vertical && b.archetype === archetype)
+      .sort((a, b) => b.n - a.n);
+    if (sameArch.length) return sameArch[0];
+  }
+
+  const v = lc.vertical_fallback.find((f) => f.vertical === vertical);
+  return v ?? lc.vertical_fallback[0] ?? null;
 }
 
 // ---------- Helpers ----------

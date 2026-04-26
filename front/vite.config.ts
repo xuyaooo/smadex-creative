@@ -6,5 +6,12 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    proxy: {
+      // Asset PNGs come from FastAPI's StaticFiles mount at :8000/assets
+      "/assets": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+    },
   },
 });

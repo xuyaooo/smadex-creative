@@ -1,12 +1,12 @@
 data:
   root: "../"
-  assets_dir: "../assets"
-  advertisers: "../advertisers.csv"
-  campaigns: "../campaigns.csv"
-  creatives: "../creatives.csv"
-  daily_stats: "../creative_daily_country_os_stats.csv"
-  creative_summary: "../creative_summary.csv"
-  campaign_summary: "../campaign_summary.csv"
+  assets_dir: "../data/assets"
+  advertisers: "../data/advertisers.csv"
+  campaigns: "../data/campaigns.csv"
+  creatives: "../data/creatives.csv"
+  daily_stats: "../data/creative_daily_country_os_stats.csv"
+  creative_summary: "../data/creative_summary.csv"
+  campaign_summary: "../data/campaign_summary.csv"
 
 embeddings:
   clip_model: "outputs/models/siglip2_finetuned"

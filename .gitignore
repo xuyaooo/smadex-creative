@@ -12,6 +12,10 @@ venv/
 front/node_modules/
 front/dist/
 front/.vite/
+front/tsconfig.tsbuildinfo
+front/test-results/
+front/tests/screenshots/
+front/playwright-report/
 *.log
 
 # --- macOS clutter ---

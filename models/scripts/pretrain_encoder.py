@@ -121,7 +121,7 @@ def main():
 
     loader = MasterLoader("config.yaml")
     master = loader.load_master_table()
-    asset_dir = (Path("config.yaml").parent / "../assets").resolve()
+    asset_dir = (Path("config.yaml").parent / "../data/assets").resolve()
     ds = CreativeDataset(master, asset_dir, processor)
     print(f"  dataset size: {len(ds)} creatives with images")
 

@@ -1,0 +1,115 @@
+{
+  "source": "k-means dominant-color extraction over top-performer creatives",
+  "k_clusters": 6,
+  "n_top_performers": 46,
+  "per_vertical": {
+    "travel": [
+      {
+        "hex": "#ee8136",
+        "label": "vibrant accent \u00b7 CTA / badge"
+      },
+      {
+        "hex": "#3bb6ac",
+        "label": "vibrant accent \u00b7 CTA / badge"
+      },
+      {
+        "hex": "#7454d4",
+        "label": "vibrant accent \u00b7 CTA / badge"
+      },
+      {
+        "hex": "#3a6fe1",
+        "label": "vibrant accent \u00b7 CTA / badge"
+      },
+      {
+        "hex": "#8ecc40",
+        "label": "vibrant accent \u00b7 CTA / badge"
+      },
+      {
+        "hex": "#f2f2f2",
+        "label": "near-white \u00b7 headline space"
+      }
+    ],
+    "gaming": [
+      {
+        "hex": "#8fcc40",
+        "label": "vibrant accent \u00b7 CTA / badge"
+      },
+      {
+        "hex": "#3a6fe1",
+        "label": "vibrant accent \u00b7 CTA / badge"
+      },
+      {
+        "hex": "#ee8136",
+        "label": "vibrant accent \u00b7 CTA / badge"
+      },
+      {
+        "hex": "#7454d4",
+        "label": "vibrant accent \u00b7 CTA / badge"
+      },
+      {
+        "hex": "#1d1d1a",
+        "label": "deep ink \u00b7 text / contrast"
+      },
+      {
+        "hex": "#d3ddf2",
+        "label": "near-white \u00b7 headline space"
+      }
+    ],
+    "food_delivery": [
+      {
+        "hex": "#ef965a",
+        "label": "vibrant accent \u00b7 CTA / badge"
+      },
+      {
+        "hex": "#f3daca",
+        "label": "near-white \u00b7 headline space"
+      }
+    ],
+    "fintech": [
+      {
+        "hex": "#3a6fe1",
+        "label": "vibrant accent \u00b7 CTA / badge"
+      },
+      {
+        "hex": "#f2f2f2",
+        "label": "near-white \u00b7 headline space"
+      },
+      {
+        "hex": "#181818",
+        "label": "deep ink \u00b7 text / contrast"
+      },
+      {
+        "hex": "#c5d3f0",
+        "label": "near-white \u00b7 headline space"
+      },
+      {
+        "hex": "#998333",
+        "label": "vibrant accent \u00b7 CTA / badge"
+      }
+    ],
+    "ecommerce": [
+      {
+        "hex": "#5d88e5",
+        "label": "vibrant accent \u00b7 CTA / badge"
+      },
+      {
+        "hex": "#d5d6cb",
+        "label": "muted neutral \u00b7 background"
+      },
+      {
+        "hex": "#40423e",
+        "label": "muted neutral \u00b7 background"
+      }
+    ],
+    "entertainment": [
+      {
+        "hex": "#3a6fe1",
+        "label": "vibrant accent \u00b7 CTA / badge"
+      },
+      {
+        "hex": "#e0e6f2",
+        "label": "near-white \u00b7 headline space"
+      }
+    ]
+  }
+}

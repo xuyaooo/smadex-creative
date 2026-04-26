@@ -22,7 +22,7 @@ def title(s: str) -> str:
 
 def main():
     clusters = pd.read_parquet(CLUSTER_LABELS)
-    summary = pd.read_csv("../creative_summary.csv")[
+    summary = pd.read_csv("../data/creative_summary.csv")[
         ["creative_id", "vertical", "format", "dominant_color", "theme",
          "emotional_tone", "hook_type", "cta_text"]
     ]

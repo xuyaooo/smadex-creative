@@ -127,7 +127,7 @@ def main():
         sys.exit("Set OPENROUTER_API_KEY or pass --api-key.")
     asset_dir = (Path(args.config).parent / cfg["data"]["assets_dir"]).resolve()
 
-    creatives = pd.read_csv("../creatives.csv").set_index("creative_id")
+    creatives = pd.read_csv("../data/creatives.csv").set_index("creative_id")
     gt_df = creatives.loc[BENCH_IDS, [
         "faces_count", "has_discount_badge", "has_price",
         "text_density", "clutter_score", "novelty_score", "brand_visibility_score",

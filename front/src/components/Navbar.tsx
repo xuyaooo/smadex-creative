@@ -13,10 +13,10 @@ export default function Navbar() {
   return (
     <header className="fixed inset-x-0 top-0 z-40 backdrop-blur-md bg-ink-950/60 border-b border-white/5">
       <nav className="container-narrow flex h-16 items-center justify-between">
-        <Link to="/" className="flex items-center gap-2.5">
-          <Logo size={28} />
-          <span className="text-base font-bold tracking-tight">
-            Creative<span className="text-brand-400">Intelligence</span>
+        <Link to="/" className="flex items-center gap-2.5 group">
+          <Logo size={30} className="transition-transform group-hover:rotate-[8deg] group-hover:scale-105" />
+          <span className="font-display text-base font-extrabold tracking-tight">
+            Creative<span className="bg-gradient-to-r from-brand-400 via-pink-400 to-amber-300 bg-clip-text text-transparent">.AI</span>
           </span>
         </Link>
 

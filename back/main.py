@@ -36,7 +36,7 @@ print("Pipeline ready.")
 
 MASTER = PIPELINE._master_df
 DAILY = PIPELINE._daily_df
-ASSETS_DIR = (ROOT / "assets").resolve()
+ASSETS_DIR = (ROOT / "data" / "assets").resolve()
 
 
 # ---------------- FastAPI app ----------------

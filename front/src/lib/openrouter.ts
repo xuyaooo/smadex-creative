@@ -595,36 +595,183 @@ export async function editCreativeImageFromDataUrl(
 // Used in draw mode — returns a single short tip from the latest canvas
 // snapshot. `recentTips` is a list of prior tips the model has already given,
 // so we can tell it not to repeat itself.
+// Rich campaign context that the parent already has (analysis, prediction,
+// palette, metadata). When passed in, Maya stops giving generic tips and
+// starts grounding her advice in the *actual* model diagnosis for THIS ad.
+export interface MayaContext {
+  vertical?: string;
+  format?: string;
+  predictedStatus?: string;            // e.g. "fatigued" | "top_performer"
+  healthScore?: number;                // 0–100
+  classProbs?: { top: number; stable: number; fatigued: number; under: number };
+  // Top-line diagnosis from the analysis card (so Maya speaks the same language)
+  performanceSummary?: string;
+  topRecommendation?: string;
+  visualStrengths?: string[];
+  visualWeaknesses?: string[];
+  fatigueRiskReason?: string;
+  // Palette + structured fixes already shown to the user — Maya should build on
+  // these rather than repeat them
+  palette?: { hex: string; label: string }[];
+  layoutFixes?: string[];
+  copyFixes?: string[];
+  colorFixes?: string[];
+}
+
+function formatCampaignContext(ctx?: MayaContext): string {
+  if (!ctx) return "";
+  const lines: string[] = [];
+  if (ctx.vertical || ctx.format) {
+    lines.push(`vertical: ${ctx.vertical ?? "?"} · format: ${ctx.format ?? "?"}`);
+  }
+  if (ctx.predictedStatus !== undefined || ctx.healthScore !== undefined) {
+    const probs = ctx.classProbs
+      ? ` (top ${(ctx.classProbs.top * 100).toFixed(0)}% · stable ${(ctx.classProbs.stable * 100).toFixed(0)}% · fatigued ${(ctx.classProbs.fatigued * 100).toFixed(0)}% · under ${(ctx.classProbs.under * 100).toFixed(0)}%)`
+      : "";
+    lines.push(`ensemble verdict: ${ctx.predictedStatus ?? "?"} · health ${ctx.healthScore?.toFixed(0) ?? "?"}/100${probs}`);
+  }
+  if (ctx.performanceSummary) lines.push(`summary: ${ctx.performanceSummary}`);
+  if (ctx.fatigueRiskReason) lines.push(`fatigue risk: ${ctx.fatigueRiskReason}`);
+  if (ctx.topRecommendation) lines.push(`top recommendation already given: "${ctx.topRecommendation}"`);
+  if (ctx.visualStrengths?.length) lines.push(`already-noted strengths: ${ctx.visualStrengths.slice(0, 4).join(" · ")}`);
+  if (ctx.visualWeaknesses?.length) lines.push(`already-noted weaknesses: ${ctx.visualWeaknesses.slice(0, 4).join(" · ")}`);
+  if (ctx.palette?.length) {
+    lines.push(`data-grounded palette (top performers in this vertical): ${ctx.palette.slice(0, 5).map((p) => `${p.hex} ${p.label}`).join(" · ")}`);
+  }
+  if (ctx.layoutFixes?.length) lines.push(`layout fixes already surfaced: ${ctx.layoutFixes.slice(0, 3).join(" · ")}`);
+  if (ctx.copyFixes?.length)   lines.push(`copy fixes already surfaced: ${ctx.copyFixes.slice(0, 3).join(" · ")}`);
+  if (ctx.colorFixes?.length)  lines.push(`color fixes already surfaced: ${ctx.colorFixes.slice(0, 3).join(" · ")}`);
+  return lines.length ? `\n\nCAMPAIGN CONTEXT (use this to ground your advice — do NOT just paraphrase the items already surfaced; build on them, push further, or react to what you SEE in the circled region):\n${lines.map((l) => `· ${l}`).join("\n")}` : "";
+}
+
 export async function liveDrawingTip(
   dataUrl: string,
   recentTips: string[] = [],
+  context?: MayaContext,
   apiKey: string = ENV_KEY,
 ): Promise<string> {
   if (!apiKey) throw new Error("Missing OpenRouter API key");
 
   const historyBlock = recentTips.length
-    ? "\n\nYOU HAVE ALREADY GIVEN THESE TIPS — do NOT repeat them, do NOT paraphrase them. Keep momentum forward, address something NEW you can see now:\n" +
+    ? "\n\nYOU HAVE ALREADY GIVEN THESE TIPS — DO NOT repeat them, DO NOT paraphrase them, DO NOT give the same advice with different words. Move to a NEW angle:\n" +
       recentTips.map((t, i) => `${recentTips.length - i}. "${t}"`).join("\n")
     : "";
+
+  const ctxBlock = formatCampaignContext(context);
+
+  // Variety jitter: pick a different "lens" each call so back-to-back tips
+  // never sound the same. The model is told to honour the lens.
+  const lenses = [
+    "eye-flow & hierarchy", "contrast & legibility", "brand visibility",
+    "fatigue / novelty", "emotional pull", "CTA prominence",
+    "negative space & breathing room", "color harmony", "copy density",
+    "story-in-1-second", "thumb-stop power",
+  ];
+  const lens = lenses[Math.floor(Math.random() * lenses.length)];
 
   const raw = await callOpenRouter({
     apiKey,
     imageDataUrl: dataUrl,
     systemPrompt:
-      "You are Maya — a senior ad-creative director with 15 years at Wieden+Kennedy and Smadex. " +
-      "The designer just CIRCLED a region of an ad creative to ask your opinion on that specific area. " +
-      "Look at the circled region first. Decide: is it fine as-is, or does it need a fix? " +
-      "If fine: say so warmly in one short sentence (\"the brand mark sits perfectly there — leave it\"). " +
-      "If it needs work: name the element they circled and give ONE concrete, sensory fix. " +
-      "Vary phrasing across tips. Use sensory verbs (\"pop\", \"breathe\", \"cut\", \"land\", \"warm up\") not vague adjectives. " +
-      "Speak like a human collaborator, not corporate AI. Output JSON only.",
+      "You are Maya — a senior ad-creative director (15y at Wieden+Kennedy and Smadex). " +
+      "The designer circled a region of an ad creative to ask your take. " +
+      "You ALSO have the ensemble's diagnosis for this exact creative (status, health, weaknesses, palette, fixes). " +
+      "Your job: identify WHAT they circled, react SPECIFICALLY to that element, and ground the advice in the campaign context. " +
+      "Use the campaign data to be concrete: name the predicted status, cite the health score, reference the palette, or call out the specific weakness if relevant. " +
+      "Hard rules: " +
+      "(1) Never repeat or paraphrase a tip you've already given. " +
+      "(2) Never give generic advice (\"make it pop\", \"add contrast\") — be element-specific and causal. " +
+      "(3) Vary phrasing every turn — different verbs, different framings, sometimes a question, sometimes an approval. " +
+      "(4) Sound human, not corporate. " +
+      "Output JSON only.",
     userPrompt:
-      "The designer drew a closed loop around a specific element of this ad. " +
-      "Identify what they circled (CTA, headline, product, badge, brand mark, background, face, copy block, etc.) and either approve it or give one concrete fix." +
+      `The designer drew a closed lasso around an element. Identify it (CTA, headline, hero shot, badge, brand mark, background, face, copy block, …) and react.` +
+      `\n\nFor this turn, lead with the lens of: **${lens}**.` +
+      ctxBlock +
       historyBlock +
-      '\n\nReturn ONLY: { "tip": "one warm sentence (≤ 22 words) that names the element they circled, then either approves or gives one fix" }',
+      `\n\nReturn ONLY: { "tip": "one sharp sentence (≤ 28 words) that NAMES the circled element and gives a specific take grounded in the campaign data — approve it, fix it, or push the designer with a question" }`,
     model: LIVE_MODEL,
-    maxTokens: 100,
+    maxTokens: 130,
   });
   return String(raw.tip ?? "Looks solid — that area's pulling its weight. Try circling another element to keep iterating.");
+}
+
+// ---------- Maya chat (follow-up Q&A on the circled region) ----------
+//
+// `chatWithMaya` is the conversational variant of liveDrawingTip. The
+// transcript is the full back-and-forth so far (user + assistant turns); we
+// also re-send the most recent canvas snapshot WITH the lasso visible so the
+// model stays anchored on the region the user actually circled.
+export async function chatWithMaya(
+  transcript: { role: "user" | "assistant"; text: string }[],
+  regionDataUrl: string | null,
+  context?: MayaContext,
+  apiKey: string = ENV_KEY,
+): Promise<string> {
+  if (!apiKey) throw new Error("Missing OpenRouter API key");
+  if (!transcript.length) return "";
+
+  const ctxBlock = formatCampaignContext(context);
+
+  const SYSTEM =
+    "You are Maya — a senior ad-creative director with 15 years at Wieden+Kennedy and Smadex, " +
+    "now embedded with this designer as their on-call review buddy. The designer circled a region of " +
+    "an ad creative, you gave a first take, and now you're chatting about it. " +
+    "You ALSO have the ensemble's diagnosis for this exact creative (status, health, weaknesses, palette, fixes). " +
+    "Use that data to stay specific — cite the predicted status, the health score, palette, or a named weakness when relevant. " +
+    "Keep replies conversational and tight (1-3 sentences, ≤ 60 words). " +
+    "Push them with concrete suggestions, name elements specifically (CTA, headline, badge, brand mark, hero, copy block), " +
+    "and reference the circled region when it's relevant. " +
+    "If they ask 'why', give the causal mechanism (eye-flow, contrast, hierarchy, fatigue). " +
+    "Don't repeat what you already said — build on it. " +
+    "Skip JSON wrappers, skip greetings, skip apologies. Just talk like a human collaborator." +
+    ctxBlock;
+
+  // Compose a single multi-turn payload. Vision input is attached only on the
+  // last user turn so we don't blow up the request size.
+  const messages: any[] = [{ role: "system", content: SYSTEM }];
+  for (let i = 0; i < transcript.length; i++) {
+    const m = transcript[i];
+    const isLastUser = i === transcript.length - 1 && m.role === "user";
+    if (isLastUser && regionDataUrl) {
+      messages.push({
+        role: "user",
+        content: [
+          { type: "text", text: m.text },
+          { type: "image_url", image_url: { url: regionDataUrl } },
+        ],
+      });
+    } else {
+      messages.push({ role: m.role, content: m.text });
+    }
+  }
+
+  const res = await fetch(OPENROUTER_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "",
+      "X-Title": "Creative.AI · Maya chat",
+    },
+    body: JSON.stringify({
+      model: LIVE_MODEL,
+      max_tokens: 220,
+      temperature: 0.7,
+      messages,
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`OpenRouter chat failed ${res.status}: ${errText.slice(0, 200)}`);
+  }
+
+  const json = await res.json();
+  const reply = json?.choices?.[0]?.message?.content;
+  if (typeof reply === "string") return reply.trim();
+  if (Array.isArray(reply)) {
+    return reply.map((p: any) => (typeof p === "string" ? p : p?.text ?? "")).join(" ").trim();
+  }
+  return "Hmm, the reply came back empty. Try rephrasing.";
 }

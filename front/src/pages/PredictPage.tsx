@@ -12,9 +12,10 @@ import {
 } from "../lib/data";
 import { scoreCreative, counterfactual, type ScoreInput } from "../lib/predict";
 import {
-  extractMetadataFromImage, analyzeCreative, liveDrawingTip, editCreativeImage,
-  editCreativeImageFromDataUrl,
-  fileToDataURL, ENV_KEY, type CreativeAnalysis, type ExtractedMetadata,
+  extractMetadataFromImage, analyzeCreative, liveDrawingTip, chatWithMaya,
+  editCreativeImage, editCreativeImageFromDataUrl,
+  fileToDataURL, ENV_KEY,
+  type CreativeAnalysis, type ExtractedMetadata, type MayaContext,
 } from "../lib/openrouter";
 
 type Stage = "upload" | "configure" | "analyzing" | "results" | "improve" | "draw";
@@ -329,6 +330,8 @@ export default function PredictPage() {
               key="draw"
               imageUrl={imageUrl}
               palette={neighbor && palettes ? palettes.per_vertical[neighbor.vertical] : null}
+              neighbor={neighbor}
+              analysis={analysis}
               onBack={() => setStage("results")}
             />
           )}
@@ -1357,15 +1360,77 @@ function CausalRow({
 }
 
 // ---------- Draw stage ----------
-function DrawStage({ imageUrl, onBack, palette }: { imageUrl: string; onBack: () => void; palette?: { hex: string; label: string }[] | null }) {
+type ChatMsg = {
+  role: "maya" | "user";
+  text: string;
+  // Optional thumbnail of the canvas at the moment the user circled. Lets the
+  // user see which region this thread is about.
+  region?: string;
+};
+
+function DrawStage({ imageUrl, onBack, palette, neighbor, analysis }: {
+  imageUrl: string;
+  onBack: () => void;
+  palette?: { hex: string; label: string }[] | null;
+  neighbor: Prediction | null;
+  analysis: CreativeAnalysis | null;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const [drawing, setDrawing] = useState(false);
-  const [color, setColor] = useState("#f472b6");
-  const [size, setSize] = useState(8);
   const [tip, setTip] = useState<string>("Circle any element on the creative — Maya will tell you if it's working or how to fix it.");
   const [thinking, setThinking] = useState(false);
   const [strokes, setStrokes] = useState(0);
+  // Conversation thread with Maya. First entry is the welcome line; each
+  // circled region appends a maya turn, and the user can reply via the chatbox.
+  // Welcome line is context-aware: if we already know the verdict + status,
+  // Maya opens with it so the conversation feels like she's been briefed.
+  const welcome = useMemo(() => {
+    if (!neighbor) {
+      return "Circle any element on the creative and I'll tell you if it works or how to fix it. You can chat with me about it after.";
+    }
+    const status = neighbor.pred_status?.replace("_", " ");
+    const health = Math.round(neighbor.health_score);
+    const weakness = analysis?.visual_weaknesses?.[0];
+    const tail = weakness
+      ? ` Headline issue I'd push on: "${weakness}". Circle anywhere and we'll dig in.`
+      : ` Circle anywhere and we'll dig in.`;
+    return `I've read the diagnosis — ${status}, health ${health}/100 in ${neighbor.vertical}.${tail}`;
+  }, [neighbor, analysis]);
+  const [chat, setChat] = useState<ChatMsg[]>([{ role: "maya", text: welcome }]);
+  // Refresh the welcome line if neighbor/analysis arrives after mount.
+  useEffect(() => {
+    setChat((c) => (c.length === 1 && c[0].role === "maya")
+      ? [{ role: "maya", text: welcome }]
+      : c);
+  }, [welcome]);
+  const [chatBusy, setChatBusy] = useState(false);
+  // The most recent circled-region snapshot (the canvas frame WITH the lasso).
+  // We send this to Maya so chat replies stay grounded in the circled element.
+  const lastRegionRef = useRef<string | null>(null);
+
+  // Build the rich campaign context Maya uses to ground every reply. This is
+  // EVERYTHING the analysis card already shows: status, health, weaknesses,
+  // palette, structured fixes. Maya reads it and stops giving generic tips.
+  const mayaCtx: MayaContext = useMemo(() => ({
+    vertical: neighbor?.vertical,
+    format: neighbor?.format,
+    predictedStatus: neighbor?.pred_status,
+    healthScore: neighbor?.health_score,
+    classProbs: neighbor ? {
+      top: neighbor.p_top, stable: neighbor.p_stable,
+      fatigued: neighbor.p_fatigued, under: neighbor.p_under,
+    } : undefined,
+    performanceSummary: analysis?.performance_summary,
+    topRecommendation: analysis?.top_recommendation,
+    visualStrengths: analysis?.visual_strengths,
+    visualWeaknesses: analysis?.visual_weaknesses,
+    fatigueRiskReason: analysis?.fatigue_risk_reason,
+    palette: palette ?? undefined,
+    layoutFixes: analysis?.layout_recommendations?.map((s) => s.change),
+    copyFixes:   analysis?.copy_recommendations?.map((s) => s.change),
+    colorFixes:  analysis?.color_recommendations?.map((s) => `${s.hex} ${s.label}`),
+  }), [neighbor, analysis, palette]);
   // Persistent tip history for the coach so it can avoid repeating itself.
   const tipHistoryRef = useRef<string[]>([]);
   // Hybrid auto-trigger refs:
@@ -1423,7 +1488,14 @@ function DrawStage({ imageUrl, onBack, palette }: { imageUrl: string; onBack: ()
     currentPathRef.current = [[x, y]];
     const ctx = canvasRef.current!.getContext("2d")!;
     ctx.lineCap = "round"; ctx.lineJoin = "round";
-    ctx.strokeStyle = color; ctx.lineWidth = size;
+    // Marching-ants lasso style: thin dashed black line with a soft white halo
+    // so it stays readable on both light and dark creatives.
+    ctx.setLineDash([8, 6]);
+    ctx.lineDashOffset = 0;
+    ctx.strokeStyle = "#0a0a0a";
+    ctx.lineWidth = 2;
+    ctx.shadowColor = "rgba(255,255,255,0.85)";
+    ctx.shadowBlur = 3;
     ctx.beginPath(); ctx.moveTo(x, y);
   }
   function move(e: React.PointerEvent) {
@@ -1437,16 +1509,18 @@ function DrawStage({ imageUrl, onBack, palette }: { imageUrl: string; onBack: ()
     if (!drawing) return;
     setDrawing(false);
     const ctx = canvasRef.current!.getContext("2d")!;
-    // Close the loop visually so the user sees their selection as a circle
     const path = currentPathRef.current;
-    if (path.length >= 2) {
-      ctx.lineTo(path[0][0], path[0][1]);
-      ctx.stroke();
-    }
+    // Reset dashed style after the stroke so any later canvas ops (like
+    // re-drawing the base image) aren't dashed.
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
     ctx.closePath();
+    // Drop incidental dots / micro-flicks: don't trigger Maya for tiny taps.
+    if (path.length < 6) {
+      eraseAfter(0);
+      return;
+    }
     setStrokes((n) => n + 1);
-    // Region-mode: every closed selection triggers an immediate ask, then
-    // erases the circle so the canvas stays clean.
     askRegion();
   }
 
@@ -1458,29 +1532,52 @@ function DrawStage({ imageUrl, onBack, palette }: { imageUrl: string; onBack: ()
     }
     setThinking(true);
     try {
-      // Snapshot the canvas WITH the user's circle visible — Maya needs to
-      // see what was selected.
+      // Snapshot the canvas WITH the user's lasso visible — Maya needs to
+      // see what was selected. Stash it for follow-up chat too.
       const data = canvasRef.current!.toDataURL("image/png");
+      lastRegionRef.current = data;
       const recent = tipHistoryRef.current.slice(0, 5);
       const t = await liveDrawingTip(data, recent);
       setTip(t);
       tipHistoryRef.current = [t, ...tipHistoryRef.current].slice(0, 8);
+      setChat((c) => [...c, { role: "maya", text: t, region: data }]);
     } catch (e: any) {
-      setTip("Tip unavailable: " + (e.message ?? "request failed"));
+      const msg = "Tip unavailable: " + (e.message ?? "request failed");
+      setTip(msg);
+      setChat((c) => [...c, { role: "maya", text: msg }]);
     } finally {
       setThinking(false);
-      // Brief delay so the user sees their circle then it fades, even if
+      // Brief delay so the user sees their lasso then it fades, even if
       // the response was instant.
       eraseAfter(450);
     }
   }
 
-  // Backwards-compat alias used by the "Ask Maya" header button — fires the
-  // same region-feedback request without requiring a circle (uses the latest
-  // canvas snapshot as-is).
-  const askLLM = askRegion;
-  // Suppress unused-warning if codepath ever drops it
-  void askLLM;
+  async function sendChat(message: string) {
+    const text = message.trim();
+    if (!text || chatBusy) return;
+    if (!ENV_KEY) {
+      setChat((c) => [...c, { role: "user", text },
+        { role: "maya", text: "Set VITE_OPENROUTER_API_KEY to enable chat." }]);
+      return;
+    }
+    const next: ChatMsg[] = [...chat, { role: "user", text }];
+    setChat(next);
+    setChatBusy(true);
+    try {
+      // Build a flat transcript for the model — last 8 turns is plenty.
+      const transcript = next.slice(-8).map((m) => ({
+        role: m.role === "user" ? ("user" as const) : ("assistant" as const),
+        text: m.text,
+      }));
+      const reply = await chatWithMaya(transcript, lastRegionRef.current, mayaCtx);
+      setChat((c) => [...c, { role: "maya", text: reply }]);
+    } catch (e: any) {
+      setChat((c) => [...c, { role: "maya", text: "Chat unavailable: " + (e.message ?? "request failed") }]);
+    } finally {
+      setChatBusy(false);
+    }
+  }
 
   // Animate the circle out by lowering opacity then redrawing the base image.
   function eraseAfter(delayMs: number) {
@@ -1506,6 +1603,8 @@ function DrawStage({ imageUrl, onBack, palette }: { imageUrl: string; onBack: ()
     setImprovedUrl(null);
     setImproveCaption("");
     setImproveError(null);
+    setChat([{ role: "maya", text: "Fresh canvas. Circle any element and we can chat about it." }]);
+    lastRegionRef.current = null;
     // Reset trigger state so a fresh canvas starts clean.
     strokesSinceLastTipRef.current = 0;
     lastTipAtRef.current = 0;
@@ -1518,11 +1617,19 @@ function DrawStage({ imageUrl, onBack, palette }: { imageUrl: string; onBack: ()
   // React strict-mode echo) — state-based `improving` updates async and isn't
   // reliable for de-duping the very next call.
   const improvingRef = useRef(false);
+  // Cached canvas snapshot — needed because the canvas screen unmounts when we
+  // switch into the improver view, so a "Redo" can't read canvasRef anymore.
+  const canvasSnapRef = useRef<string | null>(null);
   async function improveAll(extraFeedback?: string) {
     if (improvingRef.current) return;
     if (!ENV_KEY) {
       setImproveError("Set VITE_OPENROUTER_API_KEY to enable AI improvement.");
       return;
+    }
+    // Snapshot BEFORE flipping the screen — once improveModalOpen flips, the
+    // chat screen unmounts and canvasRef goes null.
+    if (canvasRef.current) {
+      canvasSnapRef.current = canvasRef.current.toDataURL("image/png");
     }
     improvingRef.current = true;
     setImproving(true);
@@ -1532,9 +1639,9 @@ function DrawStage({ imageUrl, onBack, palette }: { imageUrl: string; onBack: ()
     // the result visible during regeneration so the user has continuity.
     setImproveCaption("");
     try {
-      // Always send the LATEST canvas snapshot so user sketches + previous
-      // generations both feed into the next pass.
-      const data = canvasRef.current!.toDataURL("image/png");
+      // Use the cached snapshot. Falls back to the original imageUrl on the
+      // (impossible) path where we somehow have no snapshot.
+      const data = canvasSnapRef.current ?? imageUrl;
 
       const paletteBlock = palette && palette.length
         ? `
@@ -1608,8 +1715,8 @@ Output: the finished image.`;
         ← back to results
       </button>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 card-surface p-4">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className="lg:col-span-3 card-surface p-4">
           <div className="rounded-xl overflow-hidden bg-black/40 flex items-center justify-center">
             <canvas
               ref={canvasRef}
@@ -1618,42 +1725,25 @@ Output: the finished image.`;
               style={{ maxHeight: 600 }}
             />
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-slate-400">
-              <span className="h-2 w-2 rounded-full bg-pink-400" />
-              circle to ask
-            </span>
-            <div className="flex items-center gap-2 text-[11px] text-slate-400">
-              {["#f472b6", "#a78bfa", "#22d3ee", "#34d399", "#fbbf24", "#ef4444"].map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setColor(c)}
-                  style={{ backgroundColor: c }}
-                  className={`h-5 w-5 rounded-full ring-2 transition ${color === c ? "ring-white scale-110" : "ring-white/10"}`}
-                />
-              ))}
-            </div>
-            <div className="flex items-center gap-2 text-[11px] text-slate-400">
-              <span>line</span>
-              <input type="range" min={2} max={16} step={1} value={size}
-                onChange={(e) => setSize(parseInt(e.target.value))} className="w-20 accent-brand-500" />
-              <span className="tabular-nums">{size}px</span>
-            </div>
-            <button onClick={reset} className="ml-auto btn-ghost py-1.5 px-3 text-xs">
+          <div className="mt-3 flex justify-end">
+            <button onClick={reset} className="btn-ghost py-1.5 px-3 text-xs">
               <RotateCcw className="h-3 w-3" /> reset
             </button>
           </div>
         </div>
 
-        <LiveCoachPanel
-          tip={tip}
-          thinking={thinking}
-          strokes={strokes}
-          improving={improving}
-          hasResult={!!improvedUrl}
-          onAskMaya={askLLM}
-          onImproveAll={() => improveAll()}
-        />
+        <div className="lg:col-span-2">
+          <LiveCoachPanel
+            chat={chat}
+            chatBusy={chatBusy}
+            onSendChat={sendChat}
+            thinking={thinking}
+            strokes={strokes}
+            improving={improving}
+            hasResult={!!improvedUrl}
+            onImproveAll={() => improveAll()}
+          />
+        </div>
       </div>
 
       {/* AI improvement result. Image persists across modal open/close — only
@@ -1688,19 +1778,13 @@ function ImprovedResult({
   const [feedback, setFeedback] = useState("");
   return (
     <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      transition={{ duration: 0.25 }}
-      onClick={onClose}
-      className="fixed inset-0 z-[60] grid place-items-center bg-ink-950/85 backdrop-blur-md p-4"
+      initial={{ opacity: 0, y: 14, height: 0 }}
+      animate={{ opacity: 1, y: 0, height: "auto" }}
+      exit={{ opacity: 0, y: 8, height: 0 }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      className="overflow-hidden"
     >
-      <motion.div
-        onClick={(e) => e.stopPropagation()}
-        initial={{ opacity: 0, y: 14, scale: 0.96 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 8, scale: 0.96 }}
-        transition={{ type: "spring", stiffness: 240, damping: 26 }}
-        className="card-surface relative max-w-4xl w-full overflow-hidden"
-      >
+      <div className="card-surface relative w-full overflow-hidden mt-2">
         <div className="absolute -top-24 -right-12 h-56 w-56 rounded-full bg-pink-500/25 blur-3xl pointer-events-none" />
         <button
           onClick={onClose}
@@ -1792,10 +1876,10 @@ function ImprovedResult({
 
         <div className="px-5 py-3 border-t border-white/5 flex justify-end gap-2 relative">
           <button onClick={onClose} className="btn-ghost text-sm py-1.5 px-4">
-            <CheckCircle2 className="h-4 w-4" /> keep working
+            <CheckCircle2 className="h-4 w-4" /> close
           </button>
         </div>
-      </motion.div>
+      </div>
     </motion.div>
   );
 }
@@ -1938,28 +2022,50 @@ function formatBig(v: number): string {
 
 // ---------- Live coach panel ----------
 function LiveCoachPanel({
-  tip, thinking, strokes, improving, hasResult, onAskMaya, onImproveAll,
+  chat, chatBusy, onSendChat, thinking, strokes, improving, hasResult, onImproveAll,
 }: {
-  tip: string;
+  chat: ChatMsg[];
+  chatBusy: boolean;
+  onSendChat: (message: string) => void;
   thinking: boolean;
   strokes: number;
   improving: boolean;
   hasResult: boolean;
-  onAskMaya: () => void;
   onImproveAll: () => void;
 }) {
-  // Track tip history so the panel feels like a real conversation
-  const [history, setHistory] = useState<{ tip: string; t: number }[]>([]);
+  const [input, setInput] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // Auto-scroll to the latest turn whenever the chat grows or Maya starts
+  // thinking — keeps the conversation feel.
   useEffect(() => {
-    if (!tip) return;
-    setHistory((h) => {
-      if (h.length && h[0].tip === tip) return h;
-      return [{ tip, t: Date.now() }, ...h].slice(0, 5);
-    });
-  }, [tip]);
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [chat.length, thinking, chatBusy]);
+
+  function handleSubmit(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (!input.trim() || chatBusy) return;
+    onSendChat(input);
+    setInput("");
+  }
+
+  function handleKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  }
+
+  const QUICK = [
+    "Why does that hurt CTR?",
+    "Show me a fix",
+    "What about the CTA?",
+    "Is the hierarchy ok?",
+  ];
 
   return (
-    <div className="card-surface p-0 relative overflow-hidden flex flex-col h-full">
+    <div className="card-surface p-0 relative overflow-hidden flex flex-col h-full min-h-[560px]">
       {/* atmospherics */}
       <div className="absolute -top-24 -right-16 h-56 w-56 rounded-full bg-cyan-400/15 blur-3xl pointer-events-none" />
       <motion.div
@@ -1967,12 +2073,12 @@ function LiveCoachPanel({
         animate={{ scale: [1, 1.12, 1] }} transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
       />
 
-      {/* HEADER + Ask Maya */}
+      {/* HEADER */}
       <div className="relative px-5 pt-4 pb-3 border-b border-white/5">
         <div className="flex items-center gap-3">
           <motion.div
-            animate={thinking ? { scale: [1, 1.08, 1] } : { scale: 1 }}
-            transition={thinking ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" } : { duration: 0.3 }}
+            animate={(thinking || chatBusy) ? { scale: [1, 1.08, 1] } : { scale: 1 }}
+            transition={(thinking || chatBusy) ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" } : { duration: 0.3 }}
             className="relative shrink-0"
           >
             <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-cyan-400/40 via-brand-500/40 to-pink-500/40 border border-white/15 grid place-items-center shadow-[0_0_18px_rgba(34,211,238,0.35)]">
@@ -1986,83 +2092,113 @@ function LiveCoachPanel({
             <div className="font-display font-extrabold text-sm tracking-tight flex items-center gap-2">
               Maya · live coach
               <span className={`text-[9px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded
-                ${thinking ? "bg-amber-500/15 text-amber-200 border border-amber-500/30" : "bg-emerald-500/15 text-emerald-200 border border-emerald-500/30"}`}>
-                {thinking ? "● thinking" : "● ready"}
+                ${(thinking || chatBusy) ? "bg-amber-500/15 text-amber-200 border border-amber-500/30" : "bg-emerald-500/15 text-emerald-200 border border-emerald-500/30"}`}>
+                {(thinking || chatBusy) ? "● thinking" : "● ready"}
               </span>
             </div>
             <div className="text-[10px] text-slate-400 mt-0.5">
-              <span className="tabular-nums">{strokes}</span> region{strokes === 1 ? "" : "s"} circled · circle anything to ask
+              <span className="tabular-nums">{strokes}</span> region{strokes === 1 ? "" : "s"} circled · circle then chat to dig in
             </div>
           </div>
         </div>
-
-        {/* Primary trigger: explicit Ask-Maya button. Auto-fire only happens
-            after a long idle + meaningful change. */}
-        <motion.button
-          onClick={onAskMaya}
-          disabled={thinking}
-          whileHover={!thinking ? { y: -1 } : {}}
-          whileTap={!thinking ? { scale: 0.98 } : {}}
-          className={`relative mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold border transition overflow-hidden
-            ${thinking
-              ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100 cursor-not-allowed"
-              : "border-cyan-400/40 bg-gradient-to-r from-cyan-500/20 via-brand-500/20 to-pink-500/20 text-white hover:border-cyan-400/60"}`}
-        >
-          {!thinking && (
-            <motion.span
-              className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/15 to-transparent"
-              animate={{ x: ["-100%", "200%"] }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", repeatDelay: 2 }}
-            />
-          )}
-          <span className="relative flex items-center gap-1.5">
-            {thinking
-              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Maya is looking…</>
-              : <><Lightbulb className="h-3.5 w-3.5" /> Ask Maya for a tip</>}
-          </span>
-        </motion.button>
       </div>
 
-      {/* CURRENT TIP — chat-bubble style */}
-      <div className="relative px-5 py-4 border-b border-white/5">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={tip}
-            initial={{ opacity: 0, y: 10, filter: "blur(6px)" }}
-            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-            exit={{ opacity: 0, y: -8, filter: "blur(4px)" }}
-            transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-            className="relative rounded-xl border border-cyan-400/30 bg-gradient-to-br from-cyan-500/10 via-brand-500/5 to-transparent p-3.5"
-          >
-            <div className="text-[9px] uppercase tracking-[0.2em] text-cyan-300 font-bold mb-1">latest tip</div>
-            <p className="text-[14px] font-display font-semibold text-white leading-snug">{tip}</p>
-          </motion.div>
+      {/* CHAT TRANSCRIPT */}
+      <div ref={scrollRef} className="relative flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-[260px] max-h-[420px]">
+        <AnimatePresence initial={false}>
+          {chat.map((m, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+              className={`flex gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}
+            >
+              {m.role === "maya" && (
+                <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-cyan-400/40 via-brand-500/40 to-pink-500/40 border border-white/15 grid place-items-center shrink-0 mt-0.5">
+                  <Lightbulb className="h-3 w-3 text-cyan-100" />
+                </div>
+              )}
+              <div className={`max-w-[82%] rounded-xl px-3 py-2 text-[12.5px] leading-snug
+                ${m.role === "user"
+                  ? "bg-pink-500/15 border border-pink-500/30 text-pink-50"
+                  : "bg-gradient-to-br from-cyan-500/10 via-brand-500/5 to-transparent border border-cyan-400/25 text-white"}`}>
+                {m.region && (
+                  <div className="-mx-1 -mt-1 mb-2 rounded-lg overflow-hidden border border-white/10">
+                    <img src={m.region} alt="circled region" className="w-full max-h-32 object-cover" />
+                  </div>
+                )}
+                <p className="font-display font-semibold whitespace-pre-wrap">{m.text}</p>
+              </div>
+            </motion.div>
+          ))}
         </AnimatePresence>
+        {(thinking || chatBusy) && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            className="flex gap-2 justify-start"
+          >
+            <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-cyan-400/40 via-brand-500/40 to-pink-500/40 border border-white/15 grid place-items-center shrink-0 mt-0.5">
+              <Lightbulb className="h-3 w-3 text-cyan-100" />
+            </div>
+            <div className="rounded-xl px-3 py-2.5 text-[12px] bg-cyan-500/10 border border-cyan-400/25 text-cyan-100 flex items-center gap-2">
+              <span className="flex gap-1">
+                <motion.span className="h-1.5 w-1.5 rounded-full bg-cyan-300"
+                  animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1, repeat: Infinity, delay: 0 }} />
+                <motion.span className="h-1.5 w-1.5 rounded-full bg-cyan-300"
+                  animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1, repeat: Infinity, delay: 0.15 }} />
+                <motion.span className="h-1.5 w-1.5 rounded-full bg-cyan-300"
+                  animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1, repeat: Infinity, delay: 0.3 }} />
+              </span>
+              Maya is looking…
+            </div>
+          </motion.div>
+        )}
       </div>
 
-      {/* HISTORY */}
-      {history.length > 1 && (
-        <div className="relative px-5 py-3 border-b border-white/5 max-h-36 overflow-y-auto">
-          <div className="text-[9px] uppercase tracking-[0.25em] text-slate-500 mb-2 font-bold">earlier</div>
-          <ul className="space-y-1.5">
-            {history.slice(1).map((h, i) => (
-              <motion.li
-                key={`${h.t}-${i}`}
-                initial={{ opacity: 0, x: -4 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.25, delay: i * 0.03 }}
-                className="text-[11px] text-slate-400 leading-snug flex gap-2"
+      {/* CHAT INPUT */}
+      <form onSubmit={handleSubmit} className="relative px-4 pt-3 pb-3 border-t border-white/5 bg-black/15">
+        {/* quick replies */}
+        {chat.length >= 2 && !chatBusy && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {QUICK.map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => onSendChat(q)}
+                className="text-[10px] px-2 py-1 rounded-full border border-white/10 bg-white/[0.04] text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-400/30 hover:text-cyan-100 transition"
               >
-                <span className="text-slate-600 shrink-0">·</span>
-                <span className="opacity-70">{h.tip}</span>
-              </motion.li>
+                {q}
+              </button>
             ))}
-          </ul>
+          </div>
+        )}
+        <div className={`relative rounded-xl border transition ${chatBusy ? "border-white/5 bg-white/[0.02]" : "border-white/10 bg-black/30 focus-within:border-cyan-400/40"}`}>
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKey}
+            disabled={chatBusy}
+            rows={2}
+            placeholder={chat.length <= 1 ? "Circle something first, then chat with Maya about it…" : "Ask Maya — push back, ask why, get a concrete fix…"}
+            className="w-full resize-none bg-transparent px-3 py-2.5 text-[12.5px] leading-snug text-slate-100 placeholder:text-slate-500 focus:outline-none disabled:opacity-50"
+          />
+          <div className="flex items-center justify-between px-3 pb-2">
+            <span className="text-[9px] font-mono text-slate-500">enter ↵ to send · shift+↵ for newline</span>
+            <button
+              type="submit"
+              disabled={!input.trim() || chatBusy}
+              className={`text-[11px] font-semibold px-3 py-1 rounded-md border transition flex items-center gap-1
+                ${(!input.trim() || chatBusy)
+                  ? "border-white/5 bg-white/5 text-slate-500 cursor-not-allowed"
+                  : "border-cyan-400/40 bg-gradient-to-r from-cyan-500/20 via-brand-500/20 to-pink-500/20 text-white hover:border-cyan-400/60"}`}
+            >
+              {chatBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+              send
+            </button>
+          </div>
         </div>
-      )}
-
-      {/* spacer pushes CTA + footer to bottom */}
-      <div className="flex-1" />
+      </form>
 
       {/* Link to the AI improver — no inline brief input here, the dedicated
           improve flow is one click away. */}

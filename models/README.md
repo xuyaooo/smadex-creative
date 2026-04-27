@@ -75,9 +75,9 @@ models/
 │   ├── benchmark_rubric.py            evaluate teacher-model candidates
 │   ├── label_with_openrouter.py       teacher pseudo-labels (Model 2 input)
 │   ├── finetune_smolvlm.py            LoRA fine-tune (legacy)
-│   ├── finetune_smolvlm_full.py       FULL fine-tune SmolVLM (Model 2)        ★
-│   ├── generate_flux_pairs.py         Nano Banana → (src, brief, target)      ★
-│   ├── finetune_flux_edit.py          LoRA + reward-weighted DPO (Model 3)    ★
+│   ├── finetune_smolvlm_full.py       FULL fine-tune SmolVLM (Model 2)
+│   ├── generate_flux_pairs.py         Nano Banana → (src, brief, target)
+│   ├── finetune_flux_edit.py          LoRA + reward-weighted DPO (Model 3)
 │   └── …                              (additional helpers — see scripts/ listing)
 │
 ├── src/                            library code (imported by scripts + notebooks)
@@ -98,8 +98,6 @@ models/
 ├── eval.py                         end-to-end metric + latency report
 └── requirements.txt
 ```
-
-★ = added in this iteration of the project.
 
 ## Reproduce the published numbers
 

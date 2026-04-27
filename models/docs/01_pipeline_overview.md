@@ -1,5 +1,7 @@
 # 01 · Pipeline overview
 
+> [↑ Index](../README.md) · [02 · Data pipeline →](02_data_pipeline.md)
+
 This is the full reference for the modeling side of the project. Read this
 first; the rest of the docs (`02_…06_`) drill into each phase with the
 specific files where every step is implemented.
@@ -105,6 +107,28 @@ done
 Models 2 (VLM full FT) and 3 (Flux edit LoRA + DPO) need a single H100 80 GB
 and OpenRouter credits — see [`05_personalized_vlm_and_image.md`](05_personalized_vlm_and_image.md).
 
+## Architecture decisions
+
+A few high-level calls that shaped the pipeline.
+
+- **Why a 3-model chain, not one big multimodal model.** The tabular
+  ensemble is the only piece tied to a real numeric label, so we keep
+  it at the head: the VLM and the image-edit don't have to re-discover
+  what "good" looks like — they apply a brief. We can also swap any
+  one model without retraining the others.
+
+- **Why the tabular ensemble drives the brief.** The status target is
+  the dataset's ground truth. If a VLM graded creatives instead we'd
+  be distilling its biases. Anchoring on the ensemble keeps the
+  rebuild loop closed: Model 1 says what to fix, Model 3 applies it,
+  Model 1 re-scores.
+
+- **Why we accept a third-party fallback at runtime.** Self-hosting
+  the trained SmolVLM + Flux LoRA needs a GPU and several GB of
+  weights. The fallback (Gemini via OpenRouter) keeps the demo
+  reachable without that — same prompts, same schema, only the
+  inference backend changes.
+
 ## Where to read next
 
 | | Doc | What's in it |
@@ -114,3 +138,7 @@ and OpenRouter credits — see [`05_personalized_vlm_and_image.md`](05_personali
 | **04** | [`04_visual_intelligence.md`](04_visual_intelligence.md) | Embeddings, clusters, kNN, palettes, LLM rubric |
 | **05** | [`05_personalized_vlm_and_image.md`](05_personalized_vlm_and_image.md) | SmolVLM full FT + SDFT, Flux edit LoRA + DPO |
 | **06** | [`06_evaluation.md`](06_evaluation.md) | Headline metrics, per-class / per-vertical, calibration, latency, caveats |
+
+---
+
+[↑ Index](../README.md) · [02 · Data pipeline →](02_data_pipeline.md)

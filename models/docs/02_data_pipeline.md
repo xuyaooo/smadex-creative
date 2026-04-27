@@ -1,5 +1,7 @@
 # 02 · Data pipeline
 
+> [← 01 · Pipeline overview](01_pipeline_overview.md) · [↑ Index](../README.md) · [03 · Tabular models →](03_tabular_models.md)
+
 How raw CSVs become leakage-free, balanced, group-stratified splits.
 
 **Implementation**:
@@ -124,6 +126,30 @@ Each parquet has 31 columns: 6 IDs/metadata + 1 target (`creative_status`)
 + 7 categorical + 18 numeric (incl. early-life) + 2 strat columns
 (`cluster`, `sample_weight`).
 
+## Design decisions
+
+- **Drop leakage, keep early-life signal.** Lifetime aggregates
+  (`overall_*`, `total_*`) encode the eventual outcome — useless at
+  launch time. The first-7-day signal is what ad ops actually has on
+  day 8, so we keep it.
+
+- **Drop the silently-failing visual columns.** Several dims were
+  constant-zero on most rows; the upstream extractor failed quietly.
+  Keeping them would just add noise.
+
+- **KMeans cluster as a stratification key.** The `k=24` was tuned
+  empirically — small enough to be stable, large enough to capture
+  the "vertical × format" structure that drives a lot of variance.
+
+- **Class-balanced weights with an extra boost on `top_performer`.**
+  The rarest class needs the largest hand to land at all; the boost
+  factor was tuned for max macro-F1, not picked off the shelf.
+
+- **Group-stratified splits, not plain group folds.** With a class
+  this rare, plain group folding leaves some folds with zero
+  positives. Stratifying inside each group fold keeps every class
+  represented everywhere.
+
 ## Run it
 
 ```bash
@@ -132,3 +158,7 @@ PYTHONPATH=models python3 models/scripts/build_clean_dataset.py \
 ```
 
 Wall-clock: ~5 s on CPU.
+
+---
+
+[← 01 · Pipeline overview](01_pipeline_overview.md) · [↑ Index](../README.md) · [03 · Tabular models →](03_tabular_models.md)

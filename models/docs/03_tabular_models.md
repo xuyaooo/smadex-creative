@@ -1,5 +1,7 @@
 # 03 · Tabular models
 
+> [← 02 · Data pipeline](02_data_pipeline.md) · [↑ Index](../README.md) · [04 · Visual intelligence →](04_visual_intelligence.md)
+
 The Model 1 of the chain: the soft-vote ensemble that produces the 4-class
 status, the 0–100 Health Score, and the counterfactual lifts. Plus the
 fatigue 4-bucket classifier and the lifecycle archetype + curve regressors.
@@ -52,17 +54,6 @@ python3 scripts/train_clean.py            # ~17 s — writes outputs/models/clea
 python3 scripts/train_clean.py --final    # ~20 s — writes outputs/models/final/
 ```
 
-### Backend-compat shims
-
-The FastAPI back-end ([`back/main.py`](../../back/main.py)) loads three
-extra files for the old API path:
-
-| File | Purpose |
-|---|---|
-| `outputs/models/xgb_status.json` | first XGB seed, single-model API path |
-| `outputs/models/tabular_meta.pkl` | label encoder + feature names |
-| `outputs/models/temperature.pkl` | `T = 1.0` (no-op, kept for schema compat) |
-
 ## Health Score (0–100)
 
 The user-facing score that drives the **Scale / Continue / Pivot / Pause**
@@ -104,3 +95,38 @@ front-end's Predict page.
 
 Implemented inline in `train_clean.py` and reproduced in
 [`notebooks/04_models.ipynb`](../notebooks/04_models.ipynb).
+
+## Design decisions
+
+- **Five models, not one.** Each library has its own inductive bias —
+  trees vs. linear, level-wise vs. leaf-wise, native categoricals vs.
+  encoded ones. Averaging them smooths out each one's blind spots.
+  Removing any single member costs a small but real chunk of macro-F1.
+
+- **Five seeds for XGBoost.** It's the highest-variance member across
+  seeds, so the bag pays off there. The other libraries are stable
+  enough at this size that more seeds wouldn't help.
+
+- **Arithmetic mean of probabilities, not a learned stacker.** A
+  stacker would need its own held-out set, which the rare classes
+  can't really afford here. The simpler average is the safer call
+  and was within noise of the alternatives we tried.
+
+- **No temperature scaling in production.** The optimum scalar landed
+  essentially on the no-op. Averaging several probabilistic models
+  is itself a calibration regulariser, so the ensemble was already
+  close enough.
+
+- **Fatigue as a separate model, not a multi-task head.** Fatigue's
+  target only makes sense for non-stable creatives, and a shared
+  trunk made the status head a touch worse. Two clean models beat
+  one tangled one.
+
+- **Ship bucket-mean lifecycle curves, not the regressor.** The
+  per-sample regressor catches the average shape but not the
+  individual one. Serving real top-performer curve means by
+  vertical × format is the more honest answer.
+
+---
+
+[← 02 · Data pipeline](02_data_pipeline.md) · [↑ Index](../README.md) · [04 · Visual intelligence →](04_visual_intelligence.md)

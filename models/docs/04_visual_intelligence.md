@@ -1,5 +1,7 @@
 # 04 · Visual intelligence
 
+> [← 03 · Tabular models](03_tabular_models.md) · [↑ Index](../README.md) · [05 · Personalized VLM + Flux edit →](05_personalized_vlm_and_image.md)
+
 The visual side of the pipeline — embeddings, clusters, retrieval, the
 data-grounded color palettes, and the LLM rubric features that augment
 the tabular model.
@@ -100,3 +102,28 @@ LLM rubric (15 dims) ──► concat into tabular features (optional, +1–2pp 
 
 Top-performer images per vertical ──► k-means(5) ──► palettes.json
 ```
+
+## Design decisions
+
+- **SigLIP-2 over CLIP.** SigLIP-2 is the single biggest visual upgrade
+  available in this size range — better zero-shot, better
+  compositionality. CLIP is kept as a legacy fallback only.
+
+- **Per-vertical kNN, not global.** A "find similar" query in *gaming*
+  shouldn't surface a fintech ad. Splitting the index by vertical
+  keeps retrieval on-domain and makes each index small enough to
+  fit comfortably in memory.
+
+- **Deterministic cluster names.** A small LLM call would write nicer
+  labels but we'd lose reproducibility — a re-run could relabel the
+  same cluster differently. The modal-metadata recipe is boring on
+  purpose.
+
+- **Visual signal is optional in the tabular model.** It adds a few
+  points of macro-F1 on top of the tabular baseline. We keep the
+  ensemble runnable without it so the CPU path stays tractable, and
+  fold the visual side in when it's available.
+
+---
+
+[← 03 · Tabular models](03_tabular_models.md) · [↑ Index](../README.md) · [05 · Personalized VLM + Flux edit →](05_personalized_vlm_and_image.md)

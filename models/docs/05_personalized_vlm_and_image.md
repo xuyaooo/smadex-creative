@@ -1,5 +1,7 @@
 # 05 · Personalized VLM + Flux edit
 
+> [← 04 · Visual intelligence](04_visual_intelligence.md) · [↑ Index](../README.md) · [06 · Evaluation →](06_evaluation.md)
+
 Models **2** and **3** of the chain. Both are personalised on this
 dataset; both ride on top of Model 1's outputs. Both have a third-party
 fallback (Gemini 2.5 Flash Lite / Nano Banana on OpenRouter) that the
@@ -218,3 +220,34 @@ outputs/                                                              committed?
 The two ✗-marked model dirs and `flux_pairs/` are written by their
 trainers; we don't commit them because the SmolVLM full FT alone is
 ~9 GB and the Flux DiT adapter + 200 image pairs is another ~6 GB.
+
+## Design decisions
+
+- **Full fine-tune over LoRA for SmolVLM.** A small VLM on a small,
+  consistent annotation task benefits more from updating every
+  parameter than from a low-rank adapter. The legacy LoRA recipe is
+  kept around for GPUs that can't fit the full FT.
+
+- **Reward signal from our own ensemble, not human raters.** The
+  ensemble already encodes "what works" as a numeric score, and we
+  trust it. Using its health score as the DPO reward keeps the loop
+  self-consistent and removes the cost of human labelling.
+
+- **Rejection-sampling Nano Banana outputs.** The teacher is good but
+  not infallible. We re-score every generated target with the same
+  ensemble that built the brief and drop the pairs that don't actually
+  improve. Bad pairs would teach the student bad habits.
+
+- **Keep the third-party fallback path live.** The local Flux LoRA is
+  the swap-in for offline / on-device scenarios; for the standalone
+  SPA demo, the OpenRouter path renders the same flow at zero GPU
+  cost and the same output schema.
+
+- **Bricks the rebuild loop into Model 1's universe.** Anywhere we
+  could've leaned on the VLM to grade quality, we leaned on the
+  ensemble instead. It keeps Model 2 and Model 3 honest by giving
+  them a single, stable source of truth.
+
+---
+
+[← 04 · Visual intelligence](04_visual_intelligence.md) · [↑ Index](../README.md) · [06 · Evaluation →](06_evaluation.md)

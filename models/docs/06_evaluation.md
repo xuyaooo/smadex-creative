@@ -1,5 +1,7 @@
 # 06 · Evaluation
 
+> [← 05 · Personalized VLM + Flux edit](05_personalized_vlm_and_image.md) · [↑ Index](../README.md)
+
 How the numbers in `01_pipeline_overview.md` are produced and how to
 reproduce them. The held-out test set is the same one carved by
 [`scripts/build_clean_dataset.py`](../scripts/build_clean_dataset.py)
@@ -89,3 +91,28 @@ PYTHONPATH=models python3 models/eval.py
 - Top-performer detection **AUC 0.94**, underperformer **AUC 0.98**.
 - Health-Score → Scale recommendation has **78% precision** (7 of 9 picks are actual winners).
 - End-to-end Model 1 reproducible in **~4 minutes on CPU** from raw CSVs.
+
+## Design decisions
+
+- **Bootstrap CIs over analytical ones.** With this many tiny per-class
+  cells, closed-form intervals lie. Resampling is the right call — a
+  bit slower, much more honest.
+
+- **Hold-out test, not k-fold cross-val.** Group-stratified splits at
+  this dataset size already eat enough rare-class signal; doing it
+  five times wouldn't tell us anything new and would just rotate
+  noise.
+
+- **Report calibration, don't fix it artificially.** The shipped model
+  has a real but small calibration gap. Forcing a correction that
+  isn't earned (the temperature scaler's optimum was a no-op) would
+  paper over it without changing behaviour.
+
+- **One headline number, then caveats.** macro-F1 is what the brief
+  asks for, so we lead with it. The caveats live alongside, not
+  somewhere quieter — wide rare-class CIs and the synthetic-data
+  baseline are part of the same story.
+
+---
+
+[← 05 · Personalized VLM + Flux edit](05_personalized_vlm_and_image.md) · [↑ Index](../README.md)

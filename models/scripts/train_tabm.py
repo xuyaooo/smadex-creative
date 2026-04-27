@@ -9,7 +9,7 @@ Usage:
     python3 scripts/train_tabm.py
     python3 scripts/train_tabm.py --epochs 100 --k 32 --d-block 512
 
-Compares OOF metrics to the XGBoost baseline reported in qa_report.md.
+Compares OOF metrics to the XGBoost baseline reported in docs/06_evaluation.md.
 """
 import argparse
 import json

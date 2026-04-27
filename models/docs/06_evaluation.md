@@ -85,7 +85,7 @@ PYTHONPATH=models python3 models/eval.py
 5. **Lifecycle curve XGBoost regressor has r² ≈ 0.07** on shape; we ship the **bucket-means** of real curves, not the regressor's per-sample prediction, because the bucket means are more honest.
 6. **Cold-start**: the 7-day early-life signal is the strongest feature. For brand-new creatives with zero impressions the model degrades to the visual-rubric + metadata baseline (~0.45 macro-F1).
 
-## What's fair to claim in a workshop demo
+## What's fair to claim in the proposal
 
 - Tabular-only macro-F1 **0.677** on a clean, leakage-free, group-stratified split — competitive with recent transformer-based tabular models (TabPFN v2, TabM) and CatBoost on n < 1k 4-class imbalanced problems.
 - Top-performer detection **AUC 0.94**, underperformer **AUC 0.98**.

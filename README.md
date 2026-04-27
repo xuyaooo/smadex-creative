@@ -62,7 +62,7 @@ Start where you want to land. Each line tells you where the code lives.
 ├── data/                       raw inputs (1,076 PNGs + 7 CSVs)
 │
 ├── models/                     ── modeling side ──────────────────────────
-│   ├── README.md               ← workshop navigation: read first
+│   ├── README.md               ← start here for the modeling side
 │   ├── docs/                   ordered written deep-dives
 │   │   ├── 01_pipeline_overview.md       big picture · file map
 │   │   ├── 02_data_pipeline.md           audit · leakage · splits

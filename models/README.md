@@ -3,8 +3,7 @@
 This is the modeling side of the project: data prep, three personalised
 models, and the evals behind every number on the front-end.
 
-If you came here from the workshop or are reading the repo for the first
-time, the quickest tour is:
+If you're reading the repo for the first time, the quickest tour is:
 
 > **1.** Read [`docs/01_pipeline_overview.md`](docs/01_pipeline_overview.md) for the full picture.
 > **2.** Open [`notebooks/01_data_audit.ipynb`](notebooks/01_data_audit.ipynb) to see the dataset bug-hunt that motivated every preprocessing decision.
@@ -38,7 +37,7 @@ For Models 2 (SmolVLM full FT) and 3 (Flux edit LoRA + DPO), see
 [`docs/05_personalized_vlm_and_image.md`](docs/05_personalized_vlm_and_image.md).
 Both need a single H100 80 GB and OpenRouter credits.
 
-## Workshop navigation (read in this order)
+## Read in this order
 
 | | Read | Then run | Why |
 |---|---|---|---|

@@ -81,14 +81,49 @@ models/
 │   └── …                              (additional helpers — see scripts/ listing)
 │
 ├── src/                            library code (imported by scripts + notebooks)
-│   ├── data/                          loaders, feature engineering, early-life features, rubric
-│   ├── embeddings/                    CLIP / SigLIP encoder
-│   ├── models/                        tabular model, fatigue detector, recommender, VLM model
-│   ├── calibration/                   temperature scaling
-│   ├── fatigue/                       BOCPD changepoint + 0–100 health-score blend
-│   ├── inference/                     pipeline, explainer, DPP recommender, VLM inference
-│   ├── training/                      OpenRouter rubric + teacher, SDFT, continual learning
+│   │
+│   ├── data/                          input + feature builders
+│   │   ├── loader.py                       read raw CSVs into a single dataframe
+│   │   ├── feature_engineering.py          OHE / label encoding · 4 engineered ratios
+│   │   ├── early_features.py               first-7-day aggregates from the daily fact table
+│   │   ├── time_series_features.py         smoothed CTR series + slope / curvature features
+│   │   └── rubric_features.py              load 15-dim LLM rubric from parquet
+│   │
+│   ├── embeddings/                    visual encoder
+│   │   └── clip_encoder.py                 SigLIP-2 / CLIP image embedding + on-disk cache
+│   │
+│   ├── models/                        model wrappers
+│   │   ├── tabular_model.py                XGBoost ×5 + LightGBM + CatBoost + HistGBM + LogReg ensemble
+│   │   ├── fatigue_detector.py             LightGBM 4-bucket fatigue classifier
+│   │   ├── recommender.py                  per-vertical kNN over the embedding cache
+│   │   └── vlm_model.py                    inference wrapper for the finetuned SmolVLM student
+│   │
+│   ├── calibration/                   probability calibration
+│   │   └── temperature.py                  Guo-style temperature scaler (kept around, T = 1.0 in prod)
+│   │
+│   ├── fatigue/                       lifecycle signal
+│   │   ├── bocpd.py                        Bayesian Online Changepoint Detection on daily CTR
+│   │   └── health_score.py                 0–100 blend of class probs, fatigue, early CTR z-score
+│   │
+│   ├── inference/                     runtime serving (loaded by back/main.py)
+│   │   ├── pipeline.py                     unified Creative Intelligence Pipeline · cached artefacts
+│   │   ├── explainer.py                    marketer-readable templated explanations from SHAP + rubric
+│   │   ├── dpp_recommender.py              DPP / MMR diversification + perf-aware re-rank
+│   │   ├── annotations.py                  load precomputed teacher annotations (JSONL)
+│   │   └── vlm_inference.py                fresh-creative SmolVLM annotation path
+│   │
+│   ├── training/                      training-side recipes (called by scripts/)
+│   │   ├── train_tabular.py                XGBoost tabular trainer
+│   │   ├── train_fatigue.py                two-stage fatigue trainer
+│   │   ├── train_vlm.py                    LoRA SmolVLM fine-tune via teacher pseudo-labels
+│   │   ├── teacher_labeling.py             pseudo-label generation for SDFT
+│   │   ├── on_policy_distillation.py       SDFT inner loop (student-generates → teacher-corrects)
+│   │   ├── continual_learning.py           SDFT outer loop driver
+│   │   ├── openrouter_rubric.py            OpenRouter structured-rubric extractor (offline)
+│   │   └── openrouter_teacher.py           OpenRouter teacher labeler (Gemma / Gemini Flash)
+│   │
 │   └── evaluation/                    metric helpers
+│       └── metrics.py                      bootstrap CIs, ECE, per-class / per-vertical aggregates
 │
 ├── tests/                          pytest suite (≈ 24 cases)
 ├── outputs/                        committed artefacts (splits · models · embeddings · clusters · rubric · pseudo-labels · flux_pairs)

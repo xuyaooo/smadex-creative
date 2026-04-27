@@ -126,8 +126,17 @@ models/
 │       └── metrics.py                      bootstrap CIs, ECE, per-class / per-vertical aggregates
 │
 ├── tests/                          pytest suite (≈ 24 cases)
-├── outputs/                        committed artefacts (splits · models · embeddings · clusters · rubric · pseudo-labels · flux_pairs)
-├── figures/                        static figures used in docs / front-end
+├── outputs/                        committed artefacts
+│   ├── clean/                         cleaned input parquets (post-audit)
+│   ├── splits/  splits_demo/          leakage-free 717 / 143 / 216 splits + a smaller demo set
+│   ├── models/                        clean/ · final/ · vlm_finetuned/ (LoRA) · lifecycle_*/ · loose CIs
+│   ├── embeddings/                    SigLIP-2 / CLIP cache (.npz)
+│   ├── clusters/                      UMAP coords · HDBSCAN labels · cluster names
+│   ├── knn/                           per-vertical NearestNeighbors index
+│   ├── rubric/                        15-dim LLM rubric scores
+│   ├── shap/                          stratified SHAP background
+│   ├── pseudo_labels/                 teacher_labels.jsonl (Model 2 supervision)
+│   └── ablations.json                 ablation study results
 ├── config.yaml                     data + model paths
 ├── conftest.py · pytest.ini        test config
 ├── eval.py                         end-to-end metric + latency report

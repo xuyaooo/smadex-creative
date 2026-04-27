@@ -76,9 +76,8 @@ Implementation entry points:
 | [`src/inference/`](../src/inference/) | Pipeline, explainer, DPP recommender, annotations, VLM inference |
 | [`src/training/`](../src/training/) | OpenRouter rubric + teacher, SDFT loop, continual learning |
 | [`notebooks/`](../notebooks/) | 5 narrative notebooks (`01_…05_`) — audit · analysis · balancing · models · evals |
-| [`outputs/`](../outputs/) | Committed artefacts: splits, models, embeddings, clusters, rubric, pseudo-labels, flux pairs |
+| [`outputs/`](../outputs/) | Committed artefacts: cleaned inputs, splits, models, embeddings, clusters, knn, rubric, SHAP background, pseudo-labels |
 | [`tests/`](../tests/) | pytest suite (≈24 cases) |
-| [`figures/`](../figures/) | Static figures used in the docs / front-end |
 
 ## Reproduce end-to-end (CPU path)
 

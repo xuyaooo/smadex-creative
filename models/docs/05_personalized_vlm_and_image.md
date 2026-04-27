@@ -199,16 +199,22 @@ for offline / on-device / zero-per-request scenarios.
 
 ## File map (artefacts)
 
+What's committed in `outputs/` vs what each trainer creates locally:
+
 ```
-outputs/
+outputs/                                                              committed?
 ├── models/
-│   ├── final/                    Model 1 — tabular ensemble (5 boosters + meta)
-│   ├── vlm_finetuned/            Model 2 — SmolVLM LoRA (legacy)
-│   ├── vlm_finetuned_full/       Model 2 — SmolVLM full FT  ★ recommended
-│   └── flux_edit_finetuned/      Model 3 — Flux edit LoRA + DPO
-├── pseudo_labels/teacher_labels.jsonl
-├── flux_pairs/
-│   ├── manifest.jsonl
-│   └── images/<cid>__{source,target}.png
-└── rubric/rubric_scores.parquet  optional 15-dim rubric features
+│   ├── final/                    Model 1 — tabular ensemble           ✓ yes
+│   ├── vlm_finetuned/            Model 2 — SmolVLM LoRA (legacy)      ✓ yes
+│   ├── vlm_finetuned_full/       Model 2 — SmolVLM full FT            ✗ created by finetune_smolvlm_full.py
+│   └── flux_edit_finetuned/      Model 3 — Flux edit LoRA + DPO       ✗ created by finetune_flux_edit.py
+├── pseudo_labels/teacher_labels.jsonl   Gemma teacher pseudo-labels   ✓ yes
+├── rubric/rubric_scores.parquet         15-dim LLM rubric             ✓ yes
+└── flux_pairs/                          (src, brief, target) triples  ✗ created by generate_flux_pairs.py
+    ├── manifest.jsonl
+    └── images/<cid>__{source,target}.png
 ```
+
+The two ✗-marked model dirs and `flux_pairs/` are written by their
+trainers; we don't commit them because the SmolVLM full FT alone is
+~9 GB and the Flux DiT adapter + 200 image pairs is another ~6 GB.

@@ -11,7 +11,7 @@ fatigue 4-bucket classifier and the lifecycle archetype + curve regressors.
 - [`scripts/train_lifecycle.py`](../scripts/train_lifecycle.py) — 14-day lifecycle curves
 - [`src/models/tabular_model.py`](../src/models/tabular_model.py), [`fatigue_detector.py`](../src/models/fatigue_detector.py) — model wrappers
 - [`src/fatigue/health_score.py`](../src/fatigue/health_score.py) — the 0–100 blend
-- [`notebooks/04_models.ipynb`](../notebooks/04_models.ipynb) — train + benchmark + TreeSHAP + counterfactuals
+- [`notebooks/04_models.ipynb`](../notebooks/04_models.ipynb) — train + benchmark + TreeSHAP (per-feature attributions for tree models) + counterfactuals
 
 ## Status classifier — soft-vote ensemble of 5
 
@@ -24,12 +24,15 @@ fatigue 4-bucket classifier and the lifecycle archetype + curve regressors.
 | Logistic Regression | `sklearn` | `logreg.pkl` (8 KB) | `logreg.pkl` (8 KB) |
 | Encoders + label map | — | `meta.pkl` (2 KB) | `meta.pkl` (2 KB) |
 
-**Aggregation**: arithmetic mean of per-model softmax probabilities.
+**Aggregation**: arithmetic mean of per-model probability vectors
+(softmax outputs).
 
-**No temperature scaling** — `T = 1.0`. We tried Guo-style temperature
-scaling; the optimal `T ≈ 0.96` was indistinguishable from a no-op so we
-removed it. ECE on the held-out test = 0.073, in the "acceptable but
-visibly miscalibrated" band.
+**No temperature scaling** — `T = 1.0`. Guo-style temperature scaling
+fits one scalar that sharpens or softens the probability vector; we
+tried it and the optimum was effectively a no-op, so we removed it.
+ECE (Expected Calibration Error — the gap between predicted confidence
+and actual accuracy) on the held-out test = 0.073, in the "acceptable
+but visibly miscalibrated" band.
 
 ### XGBoost hyperparameters
 

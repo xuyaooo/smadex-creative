@@ -149,9 +149,11 @@ would teach the student bad habits, so we drop them.
 [`scripts/finetune_flux_edit.py`](../scripts/finetune_flux_edit.py) runs
 two stages:
 
-**Stage 1 · supervised LoRA (SFT)** — rank-32 LoRA on the DiT
+**Stage 1 · supervised LoRA (SFT — supervised fine-tuning)** — rank-32
+LoRA on the DiT (Diffusion Transformer — the visual model's backbone)
 cross-attention blocks (`to_q, to_k, to_v, to_out.0`). Loss = MSE on
-the rectified-flow velocity between source and target latents,
+the rectified-flow velocity (the per-step direction the diffusion model
+takes going from source to target) between source and target latents,
 conditioned on the brief. ~6 h on a single H100.
 
 **Stage 2 · reward-weighted DPO** (with `--dpo`) — for each pair we

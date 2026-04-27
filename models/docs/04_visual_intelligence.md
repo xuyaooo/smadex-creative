@@ -29,6 +29,11 @@ The `.npz` is keyed by `creative_id` so downstream code is shape-agnostic.
 
 ## UMAP + HDBSCAN clusters
 
+UMAP (a non-linear projection that lays out high-dimensional embeddings
+in 2-D while keeping nearby points nearby) gives the front-end its
+scatter; HDBSCAN (density-based clustering — keeps a cluster only if
+it's dense enough, otherwise marks it as noise) gives the cluster ids.
+
 **Implementation**: [`scripts/build_artifacts.py`](../scripts/build_artifacts.py),
 [`scripts/name_clusters.py`](../scripts/name_clusters.py).
 
@@ -46,15 +51,18 @@ hook_type` triple, and writes a human-readable label like
 
 **Implementation**: [`scripts/build_artifacts.py`](../scripts/build_artifacts.py).
 
-A separate `sklearn.NearestNeighbors` index per vertical so retrieval
-stays on-domain:
+A separate `sklearn.NearestNeighbors` index per vertical (kNN, k-nearest-
+neighbour retrieval — pulls the k creatives closest to the query in the
+embedding space) so retrieval stays on-domain:
 
 ```
 outputs/knn/index.pkl    6.4 MB    {vertical: (NearestNeighbors, ids)}
 ```
 
 Used by the front-end's "find similar creatives" path with optional MMR
-diversification.
+diversification (Maximum Marginal Relevance — picks results that are
+both close to the query *and* different from each other, so you don't
+get five near-duplicates).
 
 ## Per-vertical color palettes
 

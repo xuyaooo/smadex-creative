@@ -13,9 +13,9 @@ returns a verdict, an explanation, and a rebuild:
 
 | | Model | Role | Backed by |
 |---|---|---|---|
-| **1** | Soft-vote tabular ensemble | 4-class status + Health Score (0–100) + counterfactual lifts | XGBoost ×5 seeds + LightGBM + CatBoost + HistGBM + LogReg |
-| **2** | Personalized VLM | Structured analysis JSON (strengths, weaknesses, fatigue reason, fixes) | SmolVLM-Instruct full fine-tune + SDFT |
-| **3** | Image-edit | Ensemble-driven creative rebuild | Flux edit, rank-32 LoRA + reward-weighted DPO |
+| **1** | Soft-vote tabular ensemble — five models vote on each creative by averaging their probability vectors | 4-class status + Health Score (0–100) + counterfactual lifts | XGBoost ×5 seeds + LightGBM + CatBoost + HistGBM + LogReg |
+| **2** | Personalized VLM | Structured analysis JSON (strengths, weaknesses, fatigue reason, fixes) | SmolVLM-Instruct full fine-tune + SDFT (self-distillation: the student generates, the teacher corrects, the student refits on the corrected output) |
+| **3** | Image-edit | Ensemble-driven creative rebuild | Flux edit, rank-32 LoRA (low-rank adapter — trains a small extra set of weights instead of the whole base model) + reward-weighted DPO (Direct Preference Optimisation — the model learns from winner/loser pairs) |
 
 Implementation entry points:
 - Tabular ensemble — [`scripts/train_clean.py`](../scripts/train_clean.py)
@@ -47,7 +47,7 @@ Implementation entry points:
                                                       scripts/build_palette_lookup.py
         ▼                                                          ▼
   outputs/models/{clean,final}/                       outputs/embeddings/ + clusters/
-  test macro-F1 = 0.677 (final)                       SigLIP-2 / CLIP + UMAP + HDBSCAN + kNN
+  test macro-F1 = 0.677 (final)                       SigLIP-2 / CLIP + UMAP (2-D projection) + HDBSCAN (density clusters) + kNN (k-nearest-neighbour retrieval)
                                                       per-vertical palettes (k-means)
                                                                    │
                                                                    ▼
@@ -74,7 +74,7 @@ Implementation entry points:
 | [`src/embeddings/`](../src/embeddings/) | CLIP / SigLIP encoder |
 | [`src/models/`](../src/models/) | Tabular model, fatigue detector, recommender, VLM model |
 | [`src/calibration/`](../src/calibration/) | Temperature scaling (kept around but not used in production) |
-| [`src/fatigue/`](../src/fatigue/) | BOCPD changepoint detector + 0–100 health-score blend |
+| [`src/fatigue/`](../src/fatigue/) | BOCPD (Bayesian online changepoint detection — flags when a daily metric breaks its trend) + the 0–100 health-score blend |
 | [`src/inference/`](../src/inference/) | Pipeline, explainer, DPP recommender, annotations, VLM inference |
 | [`src/training/`](../src/training/) | OpenRouter rubric + teacher, SDFT loop, continual learning |
 | [`notebooks/`](../notebooks/) | 5 narrative notebooks (`01_…05_`) — audit · analysis · balancing · models · evals |

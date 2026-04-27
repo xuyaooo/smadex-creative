@@ -87,7 +87,7 @@ PYTHONPATH=models python3 models/eval.py
 
 ## What's fair to claim in a workshop demo
 
-- Tabular-only macro-F1 **0.677** on a clean, leakage-free, group-stratified split — competitive with TabPFN-v2 / TabM / CatBoost benchmarks on n < 1k 4-class imbalanced problems.
+- Tabular-only macro-F1 **0.677** on a clean, leakage-free, group-stratified split — competitive with recent transformer-based tabular models (TabPFN v2, TabM) and CatBoost on n < 1k 4-class imbalanced problems.
 - Top-performer detection **AUC 0.94**, underperformer **AUC 0.98**.
 - Health-Score → Scale recommendation has **78% precision** (7 of 9 picks are actual winners).
 - End-to-end Model 1 reproducible in **~4 minutes on CPU** from raw CSVs.

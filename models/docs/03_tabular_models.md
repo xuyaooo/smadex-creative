@@ -99,6 +99,53 @@ front-end's Predict page.
 Implemented inline in `train_clean.py` and reproduced in
 [`notebooks/04_models.ipynb`](../notebooks/04_models.ipynb).
 
+## Feature analysis
+
+A TreeSHAP pass over the ensemble surfaces a clear hierarchy of which
+features actually carry the signal:
+
+- **Early-life behaviour leads by a wide margin.** `early_ctr` is the
+  single strongest feature, with `early_cvr`, `early_imp`, and
+  `early_revenue` filling out the top of the list. The first 7 days of
+  on-platform performance tell you most of what you need to know.
+- **Vertical and format are next.** Useful, but mostly because they
+  set the *expectation* for the early-life numbers (a "normal"
+  CTR in fintech is not the same as in gaming).
+- **The genome cluster id** acts as a coarse summary of the
+  categorical mix and contributes a smaller but consistent chunk.
+- **The visual rubric and tabular extras** add a thinner tail of
+  signal. Useful when present, not load-bearing.
+
+What this means for deployment: you can train a leaner model on **just
+the top features** — early-life aggregates plus a couple of contextual
+columns (vertical, format, cluster id) — and keep most of the
+performance. The full feature set buys a little extra macro-F1, but a
+slim model is plenty if you're tight on inputs (e.g. an early-launch
+flow where rubric scores aren't yet available). The cold-start cost is
+real, though: take away `early_*` and the model degrades to a
+metadata-only baseline.
+
+## Threshold analysis
+
+The Health Score lands on a 0–100 scale; the front-end turns that into
+four action tiers — **Scale · Continue · Pivot · Pause**. The tier
+boundaries are tunable and were chosen with two competing pressures in
+mind:
+
+- **Precision matters more than coverage at the extremes.** A "Scale"
+  call should be right almost every time it fires; a "Pause" call
+  should rarely tell you to kill a working creative.
+- **The middle tiers are advisory.** "Continue" and "Pivot" are
+  recommendations, not commands, so we can afford to be more generous
+  with their range without harming users.
+
+The current cut points sit where the precision curve elbows on the
+held-out set: high enough to keep Scale clean, low enough to keep
+Pause defensive. They're not magic numbers — sweep them and you trade
+precision for coverage smoothly. The cuts live in
+[`src/fatigue/health_score.py`](../src/fatigue/health_score.py) and
+can be re-tuned without retraining the underlying ensemble.
+
 ## Design decisions
 
 - **Five models, not one.** Each library has its own inductive bias —

@@ -24,6 +24,9 @@ test("home page renders and scrolls without runtime errors", async ({ page }) =>
   await expect(page.getByRole("heading", { name: /not reach what you expected/i })).toBeVisible();
   await expect(page.getByRole("link", { name: /start now/i }).first()).toBeVisible();
 
+  // Let Framer Motion entrance animations + WordReveal staggers settle
+  await page.waitForTimeout(2500);
+
   // Take a hero shot
   await page.screenshot({ path: path.join(SHOTS, "01-hero.png"), fullPage: false });
 

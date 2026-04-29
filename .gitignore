@@ -16,6 +16,9 @@ front/tsconfig.tsbuildinfo
 front/test-results/
 front/tests/screenshots/
 front/playwright-report/
+
+# Keep curated README screenshots
+!docs/images/
 *.log
 
 # --- macOS clutter ---
